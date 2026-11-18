@@ -1,4 +1,4 @@
-import type { BridgeLaunchPayload, PanelNode, PanelType } from '../types/panel';
+import type { PanelNode, PanelType } from '../types/panel';
 
 export const BRIDGE_VERSION = '1.6.0';
 export const BRIDGE_PROBE_REQUEST_EVENT = 'waymark-probe-request';
@@ -78,16 +78,7 @@ export function buildBasicAuthTargetUrl(
   }
 }
 
-function toBase64Url(str: string): string {
-  const bytes = new TextEncoder().encode(str);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-export function buildBridgeLaunchUrl(node: PanelNode, panelType?: PanelType): string {
+export function buildBridgeLaunchUrl(node: PanelNode, _panelType?: PanelType): string {
   const targetUrl = buildPanelTargetUrl(node);
   if (!node.username && !node.password) {
     return targetUrl;
@@ -96,22 +87,9 @@ export function buildBridgeLaunchUrl(node: PanelNode, panelType?: PanelType): st
   if (authMode === 'basic') {
     return buildBasicAuthTargetUrl(targetUrl, node.username, node.password);
   }
-  const payload: BridgeLaunchPayload = {
-    id: node.id,
-    name: node.name,
-    panelType,
-    origin: normalizeBaseUrl(node.baseUrl),
-    targetUrl,
-    entrance: normalizeEntrance(node.entrance),
-    username: node.username,
-    password: node.password,
-    version: node.version,
-    autoSubmit: node.autoSubmit,
-    authMode,
-    ts: Date.now(),
-  };
-  const encoded = toBase64Url(JSON.stringify(payload));
-  return `${targetUrl}#_1p_autologin=${encoded}`;
+  // Security: Never append Base64-encoded credentials or site metadata to the URL hash.
+  // Credentials are transmitted exclusively via isolated in-memory extension/userscript IPC on launch.
+  return targetUrl;
 }
 
 /**
@@ -608,21 +586,12 @@ ${updateUrls}
   'use strict';
 
   const STORAGE_KEY = 'paneldeck_pending_login';
-  const MAX_AGE_MS = 180000;
+  const MAX_AGE_MS = 60000;
   const BRIDGE_VERSION = '${BRIDGE_VERSION}';
   const PROBE_REQUEST_EVENT = '${BRIDGE_PROBE_REQUEST_EVENT}';
   const PROBE_RESULT_EVENT = '${BRIDGE_PROBE_RESULT_EVENT}';
 
 ${core}
-
-  function decodeBase64Url(b64u) {
-    let b64 = b64u.replace(/-/g, '+').replace(/_/g, '/');
-    while (b64.length % 4) b64 += '=';
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return new TextDecoder().decode(bytes);
-  }
 
   function storePendingPayload(rawObj) {
     if (!rawObj || !rawObj.origin) return;
@@ -770,24 +739,10 @@ ${core}
       } catch (_) {}
     } else if (ev.data.type === 'WAYMARK_USERSCRIPT_PROBE_REQUEST') {
       runProbeRequest(ev.data);
+    } else if (ev.data.source === 'waymark-autofill' && ev.data.type === 'WAYMARK_AUTOFILL_FILLED') {
+      try { GM_deleteValue(STORAGE_KEY); } catch (_) {}
     }
   });
-
-  // Capture the hash payload before the target SPA rewrites the URL.
-  let hashPayload = null;
-  if (location.hash && location.hash.includes('_1p_autologin=')) {
-    try {
-      const match = location.hash.match(/_1p_autologin=([A-Za-z0-9_-]+)/);
-      if (match && match[1]) {
-        hashPayload = JSON.parse(decodeBase64Url(match[1]));
-        storePendingPayload(hashPayload);
-        const cleanedHash = location.hash
-          .replace(/[#&]_1p_autologin=[A-Za-z0-9_-]+/g, '')
-          .replace(/^_1p_autologin=[A-Za-z0-9_-]+/, '');
-        history.replaceState(null, '', location.pathname + location.search + cleanedHash);
-      }
-    } catch (_) {}
-  }
 
   function isOriginMatch(itemOrigin, currentOrigin) {
     if (!itemOrigin || !currentOrigin) return false;
@@ -816,34 +771,26 @@ ${core}
   } catch (_) {}
 
   let payload = null;
-  const candidates = [];
-  if (hashPayload) candidates.push(hashPayload);
-  if (storedPayload) candidates.push(storedPayload);
   const now = Date.now();
-  for (const item of candidates) {
-    if (!item || !item.origin) continue;
-    if (item.ts && now - item.ts > MAX_AGE_MS) continue;
-    if (isOriginMatch(item.origin, location.origin)) {
-      payload = item;
-      break;
+  if (storedPayload && storedPayload.origin) {
+    if (storedPayload.ts && now - storedPayload.ts > MAX_AGE_MS) {
+      try { GM_deleteValue(STORAGE_KEY); } catch (_) {}
+    } else if (isOriginMatch(storedPayload.origin, location.origin)) {
+      payload = storedPayload;
     }
   }
 
-  if (!payload) {
-    const freshStored =
-      storedPayload && storedPayload.origin && storedPayload.ts && now - storedPayload.ts <= 15000;
-    if (hashPayload || freshStored) {
-      __wmToast('Waymark：已收到登录信息，但当前域名与站点配置不匹配', true);
-    }
+  if (!payload || isHubDocument()) {
     return;
   }
-
-  if (isHubDocument() && !hashPayload) return;
 
   if (payload.authMode === 'basic') {
     try { GM_deleteValue(STORAGE_KEY); } catch (_) {}
     return;
   }
+
+  // Burn-after-reading: clear the temporary credential ticket once matched on the target origin
+  try { GM_deleteValue(STORAGE_KEY); } catch (_) {}
 
   __wmToast('Waymark：已收到登录信息，正在填充…', false);
 

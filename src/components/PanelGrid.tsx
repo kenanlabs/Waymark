@@ -194,6 +194,11 @@ export function PanelGrid({
                     }
                     onLaunch(node);
                   }}
+                  onAuxClick={(e) => {
+                    if (e.button === 1) {
+                      onLaunch(node);
+                    }
+                  }}
                   className="block p-5 pr-12 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
                 >
                   <Tooltip

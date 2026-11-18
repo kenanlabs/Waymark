@@ -162,7 +162,7 @@ function buildManifestJson(): string {
 
 function buildBackgroundJs(): string {
   return `const STORAGE_KEY = 'waymark_pending_launches';
-const MAX_AGE_MS = 180000;
+const MAX_AGE_MS = 60000;
 const MAX_ENTRIES = 12;
 
 function getSessionStore() {
@@ -249,18 +249,10 @@ async function markTabFilled(origin, tabId) {
   if (typeof tabId !== 'number') return;
   return withStorageLock(async () => {
     const list = await readPendingLaunches();
-    let changed = false;
-    for (const item of list) {
-      if (isOriginMatch(item.origin, origin)) {
-        const filledTabs = Array.isArray(item.filledTabs) ? item.filledTabs : [];
-        if (!filledTabs.includes(tabId)) {
-          item.filledTabs = [...filledTabs, tabId];
-          changed = true;
-        }
-      }
-    }
-    if (changed) {
-      await writePendingLaunches(list);
+    // Burn-after-reading: remove the consumed credential entry once the target tab is filled
+    const remaining = list.filter((item) => !isOriginMatch(item.origin, origin));
+    if (remaining.length !== list.length) {
+      await writePendingLaunches(remaining);
     }
   });
 }
@@ -676,37 +668,6 @@ function buildHubBridgeJs(): string {
     }
   }
 
-  function decodeBase64Url(b64u) {
-    let b64 = b64u.replace(/-/g, '+').replace(/_/g, '/');
-    while (b64.length % 4) b64 += '=';
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return new TextDecoder().decode(bytes);
-  }
-
-  function captureHashLaunch() {
-    if (!isExtensionContextValid()) return;
-    if (!location.hash || !location.hash.includes('_1p_autologin=')) return;
-    try {
-      const match = location.hash.match(/_1p_autologin=([A-Za-z0-9_-]+)/);
-      if (match && match[1]) {
-        const parsed = JSON.parse(decodeBase64Url(match[1]));
-        const cleanedHash = location.hash
-          .replace(/[#&]_1p_autologin=[A-Za-z0-9_-]+/g, '')
-          .replace(/^_1p_autologin=[A-Za-z0-9_-]+/, '');
-        history.replaceState(null, '', location.pathname + location.search + cleanedHash);
-        safeSendMessage({ type: 'STORE_LAUNCH', payload: parsed }, (_res, errMsg) => {
-          if (!errMsg && !isHubDocument()) {
-            safeSendMessage({ type: 'CHECK_TAB_AUTOFILL', url: location.href });
-          }
-        });
-      }
-    } catch (_) {}
-  }
-
-  captureHashLaunch();
-
   window.addEventListener('message', (ev) => {
     if (ev.source !== window || !ev.data || typeof ev.data !== 'object') return;
     const data = ev.data;
@@ -777,7 +738,6 @@ function buildHubBridgeJs(): string {
   }
   window.addEventListener('load', triggerTabAutofillCheck, { once: true });
   window.addEventListener('hashchange', () => {
-    captureHashLaunch();
     triggerTabAutofillCheck();
   });
 })();

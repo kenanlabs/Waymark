@@ -173,6 +173,12 @@ export function CommandPalette({
                           onLaunch(node);
                           onClose();
                         }}
+                        onAuxClick={(e) => {
+                          if (e.button === 1) {
+                            onLaunch(node);
+                            onClose();
+                          }
+                        }}
                         className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg transition-colors duration-100 focus-visible:outline-none ${
                           isActive
                             ? 'bg-[#F4F4F5] dark:bg-[#1C1C1F] text-[#09090B] dark:text-white'

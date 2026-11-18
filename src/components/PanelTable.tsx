@@ -305,6 +305,9 @@ export function PanelTable({
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => onLaunch(node)}
+                      onAuxClick={(e) => {
+                        if (e.button === 1) onLaunch(node);
+                      }}
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] dark:hover:bg-[#E4E4E7] rounded-md transition-[background-color,transform] duration-150 active:scale-[0.98] whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white focus-visible:ring-offset-2"
                     >
                       <span>
@@ -374,6 +377,9 @@ export function PanelTable({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => onLaunch(node)}
+                  onAuxClick={(e) => {
+                    if (e.button === 1) onLaunch(node);
+                  }}
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-[#09090B] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-md whitespace-nowrap shrink-0"
                 >
                   <span>
