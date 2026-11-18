@@ -4,6 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
 
+import {getExtensionZipBuffer} from './src/utils/extension';
+import {generateUserscriptSource} from './src/utils/userscript';
+
 export default defineConfig(() => {
   return {
     plugins: [
@@ -21,6 +24,16 @@ export default defineConfig(() => {
           const distAssets = path.resolve(distDir, 'src/assets');
           if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
             fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
+          }
+          if (fs.existsSync(distDir)) {
+            try {
+              const zipBuf = getExtensionZipBuffer();
+              fs.writeFileSync(path.resolve(distDir, 'waymark-extension.zip'), zipBuf);
+              const userscript = generateUserscriptSource();
+              fs.writeFileSync(path.resolve(distDir, 'waymark-bridge.user.js'), userscript, 'utf8');
+            } catch {
+              // Ignore static bundle asset generation errors
+            }
           }
         },
       },

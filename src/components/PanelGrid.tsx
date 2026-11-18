@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { ArrowUpRight, Check, GripVertical, KeyRound, Pencil, Pin, User } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { Tooltip } from './Tooltip';
 import type { PanelNode, PanelType, WorkspaceCustomFieldDef } from '../types/panel';
 import { buildBridgeLaunchUrl } from '../utils/userscript';
 import { resolveNodeCustomEntries } from '../utils/workspacePresets';
@@ -44,6 +45,7 @@ export function PanelGrid({
   const lastDragEndAtRef = useRef<number>(0);
 
   const canDrag = Boolean(onReorder) && nodes.length > 1;
+  const isAnyDragging = Boolean(draggingId);
 
   const handleCopyField = (
     e: React.MouseEvent,
@@ -194,12 +196,14 @@ export function PanelGrid({
                   }}
                   className="block p-5 pr-12 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
                 >
-                  <div
-                    className="flex items-center gap-1.5 text-[12px] text-[#71717A] dark:text-[#A1A1AA] truncate"
-                    title={topEntries.length > 0 ? subtitleTooltip : undefined}
+                  <Tooltip
+                    content={topEntries.length > 0 ? subtitleTooltip : undefined}
+                    disabled={isAnyDragging}
                   >
-                    <span className="truncate">{subtitle || '默认分组'}</span>
-                  </div>
+                    <div className="flex items-center gap-1.5 text-[12px] text-[#71717A] dark:text-[#A1A1AA] truncate">
+                      <span className="truncate">{subtitle || '默认分组'}</span>
+                    </div>
+                  </Tooltip>
 
                   <h3 className="mt-1.5 font-display text-[15px] font-semibold text-[#09090B] dark:text-[#FAFAFA] truncate">
                     {node.name}
@@ -208,12 +212,11 @@ export function PanelGrid({
                   <div className="mt-3 flex items-center justify-between gap-2 text-[12px] text-[#71717A] dark:text-[#A1A1AA] min-w-0">
                     <span className="font-mono truncate">{host}</span>
                     {bottomText && (
-                      <span
-                        className="text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate max-w-[46%] shrink-0"
-                        title={bottomTooltip}
-                      >
-                        {bottomText}
-                      </span>
+                      <Tooltip content={bottomTooltip} disabled={isAnyDragging}>
+                        <span className="text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate max-w-[46%] shrink-0">
+                          {bottomText}
+                        </span>
+                      </Tooltip>
                     )}
                   </div>
                 </a>
@@ -221,91 +224,97 @@ export function PanelGrid({
                 {/* Top-right launch arrow / smooth hover quick actions */}
                 <div className="absolute top-4 right-4 flex items-center gap-0.5">
                   {node.pinned && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onTogglePin(node);
-                      }}
-                      aria-label={`取消置顶 ${node.name}`}
-                      title="已置顶"
-                      className="p-1.5 text-[#2563EB] dark:text-[#60A5FA] rounded-md transition-opacity duration-150 group-hover:opacity-0 group-hover:pointer-events-none group-focus-within:opacity-0"
-                    >
-                      <Pin className="w-3.5 h-3.5" aria-hidden="true" />
-                    </button>
+                    <Tooltip content="已置顶" disabled={isAnyDragging}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onTogglePin(node);
+                        }}
+                        aria-label={`取消置顶 ${node.name}`}
+                        className="p-1.5 text-[#2563EB] dark:text-[#60A5FA] rounded-md transition-opacity duration-150 group-hover:opacity-0 group-hover:pointer-events-none group-focus-within:opacity-0"
+                      >
+                        <Pin className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </Tooltip>
                   )}
 
                   <div className="flex items-center gap-0.5 bg-white/95 dark:bg-[#111113]/95 backdrop-blur-xs pl-1 rounded-md opacity-0 translate-x-1 pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:translate-x-0 group-focus-within:pointer-events-auto transition-all duration-150">
                     {canDrag && (
-                      <span
-                        title="按住拖拽卡片调整顺序"
-                        aria-hidden="true"
-                        className="p-1.5 text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white cursor-grab active:cursor-grabbing rounded-md"
-                      >
-                        <GripVertical className="w-3.5 h-3.5" />
-                      </span>
+                      <Tooltip content="按住拖拽卡片调整顺序" disabled={isAnyDragging}>
+                        <span
+                          aria-hidden="true"
+                          className="p-1.5 text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white cursor-grab active:cursor-grabbing rounded-md"
+                        >
+                          <GripVertical className="w-3.5 h-3.5" />
+                        </span>
+                      </Tooltip>
                     )}
                     {node.username && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleCopyField(e, node, 'username', '用户名', node.username)}
-                        aria-label={`复制 ${node.name} 用户名`}
-                        title="复制用户名"
-                        className="p-1.5 text-[#71717A] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#1F1F23] rounded-md transition-colors active:scale-90"
-                      >
-                        {copiedField?.id === node.id && copiedField.field === 'username' ? (
-                          <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
-                        ) : (
-                          <User className="w-3.5 h-3.5" aria-hidden="true" />
-                        )}
-                      </button>
+                      <Tooltip content="复制用户名" disabled={isAnyDragging}>
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyField(e, node, 'username', '用户名', node.username)}
+                          aria-label={`复制 ${node.name} 用户名`}
+                          className="p-1.5 text-[#71717A] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#1F1F23] rounded-md transition-colors active:scale-90"
+                        >
+                          {copiedField?.id === node.id && copiedField.field === 'username' ? (
+                            <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
+                          ) : (
+                            <User className="w-3.5 h-3.5" aria-hidden="true" />
+                          )}
+                        </button>
+                      </Tooltip>
                     )}
                     {node.password && (
+                      <Tooltip content="复制密码" disabled={isAnyDragging}>
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyField(e, node, 'password', '密码', node.password)}
+                          aria-label={`复制 ${node.name} 密码`}
+                          className="p-1.5 text-[#71717A] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#1F1F23] rounded-md transition-colors active:scale-90"
+                        >
+                          {copiedField?.id === node.id && copiedField.field === 'password' ? (
+                            <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
+                          ) : (
+                            <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
+                          )}
+                        </button>
+                      </Tooltip>
+                    )}
+                    <Tooltip content={node.pinned ? '取消置顶' : '置顶'} disabled={isAnyDragging}>
                       <button
                         type="button"
-                        onClick={(e) => handleCopyField(e, node, 'password', '密码', node.password)}
-                        aria-label={`复制 ${node.name} 密码`}
-                        title="复制密码"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onTogglePin(node);
+                        }}
+                        aria-label={node.pinned ? `取消置顶 ${node.name}` : `置顶 ${node.name}`}
+                        className={`p-1.5 rounded-md hover:bg-[#F4F4F5] dark:hover:bg-[#1F1F23] transition-colors active:scale-90 ${
+                          node.pinned
+                            ? 'text-[#2563EB] dark:text-[#60A5FA]'
+                            : 'text-[#71717A] hover:text-[#09090B] dark:hover:text-white'
+                        }`}
+                      >
+                        <Pin className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="编辑站点" disabled={isAnyDragging}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onEdit(node);
+                        }}
+                        aria-label={`编辑 ${node.name}`}
                         className="p-1.5 text-[#71717A] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#1F1F23] rounded-md transition-colors active:scale-90"
                       >
-                        {copiedField?.id === node.id && copiedField.field === 'password' ? (
-                          <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
-                        ) : (
-                          <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
-                        )}
+                        <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onTogglePin(node);
-                      }}
-                      aria-label={node.pinned ? `取消置顶 ${node.name}` : `置顶 ${node.name}`}
-                      title={node.pinned ? '取消置顶' : '置顶'}
-                      className={`p-1.5 rounded-md hover:bg-[#F4F4F5] dark:hover:bg-[#1F1F23] transition-colors active:scale-90 ${
-                        node.pinned
-                          ? 'text-[#2563EB] dark:text-[#60A5FA]'
-                          : 'text-[#71717A] hover:text-[#09090B] dark:hover:text-white'
-                      }`}
-                    >
-                      <Pin className="w-3.5 h-3.5" aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onEdit(node);
-                      }}
-                      aria-label={`编辑 ${node.name}`}
-                      title="编辑站点"
-                      className="p-1.5 text-[#71717A] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#1F1F23] rounded-md transition-colors active:scale-90"
-                    >
-                      <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-                    </button>
+                    </Tooltip>
                   </div>
 
                   <span

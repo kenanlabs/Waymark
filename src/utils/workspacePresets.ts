@@ -1,4 +1,6 @@
 import type {
+  BgPattern,
+  BgTone,
   CustomFieldKey,
   CustomFieldPlacement,
   PanelNode,
@@ -9,6 +11,168 @@ import type {
 
 export const DEFAULT_WORKSPACE_ID = 'ws-default';
 export const DEFAULT_WORKSPACE_GROUPS = ['默认分组'];
+
+export interface BgTonePreset {
+  id: BgTone;
+  name: string;
+  subtitle: string;
+  lightCanvas: string;
+  lightSurface: string;
+  lightMuted: string;
+  lightBorder: string;
+  darkCanvas: string;
+  darkSurface: string;
+  darkMuted: string;
+  darkBorder: string;
+}
+
+export const BG_TONE_PRESETS: BgTonePreset[] = [
+  {
+    id: 'paper',
+    name: '柔光暖纸',
+    subtitle: '微暖米白纸感底色',
+    lightCanvas: '#F4F1EA',
+    lightSurface: '#FAF8F3',
+    lightMuted: '#EAE5DB',
+    lightBorder: '#DFD9CD',
+    darkCanvas: '#11100E',
+    darkSurface: '#181614',
+    darkMuted: '#211E1B',
+    darkBorder: '#2C2824',
+  },
+  {
+    id: 'sage',
+    name: '清润豆沙绿',
+    subtitle: '低饱和柔和青绿底色',
+    lightCanvas: '#EBF1ED',
+    lightSurface: '#F5F9F6',
+    lightMuted: '#DFE9E2',
+    lightBorder: '#CFDCD3',
+    darkCanvas: '#0B100D',
+    darkSurface: '#111814',
+    darkMuted: '#18221C',
+    darkBorder: '#233028',
+  },
+  {
+    id: 'stone',
+    name: '温润云灰',
+    subtitle: '中性微冷低对比灰阶',
+    lightCanvas: '#ECEEF0',
+    lightSurface: '#F7F8F9',
+    lightMuted: '#E1E5E9',
+    lightBorder: '#D3D8DE',
+    darkCanvas: '#0B0D10',
+    darkSurface: '#12151A',
+    darkMuted: '#1A1E25',
+    darkBorder: '#262B34',
+  },
+  {
+    id: 'oat',
+    name: '燕麦亚麻',
+    subtitle: '自然亚麻暖米色调',
+    lightCanvas: '#F1ECE4',
+    lightSurface: '#F9F6F1',
+    lightMuted: '#E6DFD4',
+    lightBorder: '#D9D0C3',
+    darkCanvas: '#12100E',
+    darkSurface: '#1A1714',
+    darkMuted: '#24201C',
+    darkBorder: '#302A25',
+  },
+  {
+    id: 'mist',
+    name: '雾霭冰蓝',
+    subtitle: '清爽北欧冷雾色调',
+    lightCanvas: '#EAF0F6',
+    lightSurface: '#F5F8FC',
+    lightMuted: '#DEE7F0',
+    lightBorder: '#CDD9E5',
+    darkCanvas: '#090D14',
+    darkSurface: '#101620',
+    darkMuted: '#17202D',
+    darkBorder: '#232F40',
+  },
+  {
+    id: 'pure',
+    name: '纯净默认',
+    subtitle: '经典纯白与深炭黑',
+    lightCanvas: '#FAFAFA',
+    lightSurface: '#FFFFFF',
+    lightMuted: '#F4F4F5',
+    lightBorder: '#E4E4E7',
+    darkCanvas: '#09090B',
+    darkSurface: '#111113',
+    darkMuted: '#18181B',
+    darkBorder: '#27272A',
+  },
+];
+
+export function normalizeBgTone(raw?: unknown): BgTone {
+  if (
+    raw === 'pure' ||
+    raw === 'paper' ||
+    raw === 'sage' ||
+    raw === 'stone' ||
+    raw === 'oat' ||
+    raw === 'mist'
+  ) {
+    return raw;
+  }
+  return 'paper';
+}
+
+export interface BgPatternPreset {
+  id: BgPattern;
+  name: string;
+  subtitle: string;
+}
+
+export const BG_PATTERN_PRESETS: BgPatternPreset[] = [
+  {
+    id: 'dots',
+    name: '圆点矩阵',
+    subtitle: '轻量坐标波点点缀',
+  },
+  {
+    id: 'grid',
+    name: '极细方格',
+    subtitle: '精细经纬网格底纹',
+  },
+  {
+    id: 'paper',
+    name: '纸质肌理',
+    subtitle: '微噪颗粒纸张质感',
+  },
+  {
+    id: 'lines',
+    name: '斜向细线',
+    subtitle: '45° 极细斜纹几何',
+  },
+  {
+    id: 'rings',
+    name: '圆弧几何',
+    subtitle: '顶部同心圆弧点缀',
+  },
+  {
+    id: 'none',
+    name: '纯色无纹',
+    subtitle: '不叠加任何背景纹理',
+  },
+];
+
+export function normalizeBgPattern(raw?: unknown): BgPattern {
+  if (
+    raw === 'none' ||
+    raw === 'dots' ||
+    raw === 'grid' ||
+    raw === 'paper' ||
+    raw === 'lines' ||
+    raw === 'rings'
+  ) {
+    return raw;
+  }
+  return 'dots';
+}
 
 export const FIXED_CUSTOM_FIELD_KEYS: CustomFieldKey[] = ['field1', 'field2', 'field3'];
 

@@ -11,11 +11,14 @@ import { PanelGrid } from './components/PanelGrid';
 import { PanelTable } from './components/PanelTable';
 import { PublicWorkspaceView } from './components/PublicWorkspaceView';
 import { SettingsModal, type SettingsTab } from './components/SettingsModal';
+import { Tooltip } from './components/Tooltip';
 import { TopBar } from './components/TopBar';
 import { VaultLockScreen } from './components/VaultLockScreen';
 import { WorkspaceBar } from './components/WorkspaceBar';
 import { WorkspaceModal } from './components/WorkspaceModal';
 import type {
+  BgPattern,
+  BgTone,
   EncryptedVaultEnvelope,
   PanelNode,
   PublicNodeItem,
@@ -52,11 +55,15 @@ import {
   createDefaultWorkspace,
   DEFAULT_WORKSPACE_GROUPS,
   DEFAULT_WORKSPACE_ID,
+  normalizeBgPattern,
+  normalizeBgTone,
   normalizeWorkspaceCustomFields,
 } from './utils/workspacePresets';
 
 const STORAGE_KEY = 'paneldeck_vault_v1';
 const THEME_KEY = 'paneldeck_theme_v1';
+const BG_TONE_KEY = 'waymark_bg_tone_v1';
+const BG_PATTERN_KEY = 'waymark_bg_pattern_v1';
 const VIEW_MODE_KEY = 'waymark_view_mode_v1';
 const LEGACY_GROUPS_KEY = 'paneldeck_groups_v1';
 const WORKSPACES_STORAGE_KEY = 'opsdeck_workspaces_v1';
@@ -155,7 +162,7 @@ export default function App() {
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>('bridge');
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('appearance');
   const [commandOpen, setCommandOpen] = useState(false);
   const [extensionActive, setExtensionActive] = useState(false);
   const [extensionVersion, setExtensionVersion] = useState<string | null>(null);
@@ -169,6 +176,22 @@ export default function App() {
     const saved = localStorage.getItem(THEME_KEY);
     if (saved === 'dark' || saved === 'light') return saved;
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+  const [bgTone, setBgTone] = useState<BgTone>(() => {
+    if (typeof window === 'undefined') return 'paper';
+    try {
+      return normalizeBgTone(localStorage.getItem(BG_TONE_KEY));
+    } catch {
+      return 'paper';
+    }
+  });
+  const [bgPattern, setBgPattern] = useState<BgPattern>(() => {
+    if (typeof window === 'undefined') return 'dots';
+    try {
+      return normalizeBgPattern(localStorage.getItem(BG_PATTERN_KEY));
+    } catch {
+      return 'dots';
+    }
   });
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -189,7 +212,7 @@ export default function App() {
     setSettingsOpen(true);
   };
 
-  // Theme sync
+  // Theme & background tone/pattern sync
   useEffect(() => {
     const root = document.documentElement;
     if (theme === 'dark') {
@@ -199,6 +222,26 @@ export default function App() {
     }
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute('data-bg-tone', bgTone);
+    try {
+      localStorage.setItem(BG_TONE_KEY, bgTone);
+    } catch {
+      // Ignore storage errors
+    }
+  }, [bgTone]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute('data-bg-pattern', bgPattern);
+    try {
+      localStorage.setItem(BG_PATTERN_KEY, bgPattern);
+    } catch {
+      // Ignore storage errors
+    }
+  }, [bgPattern]);
 
   // View mode local persistence
   useEffect(() => {
@@ -400,16 +443,26 @@ export default function App() {
             res.state.viewMode === 'table' || res.state.viewMode === 'grid'
               ? res.state.viewMode
               : viewMode;
+          const srvBgTone: BgTone = res.state.bgTone
+            ? normalizeBgTone(res.state.bgTone)
+            : bgTone;
+          const srvBgPattern: BgPattern = res.state.bgPattern
+            ? normalizeBgPattern(res.state.bgPattern)
+            : bgPattern;
 
           lastSavedServerSigRef.current = JSON.stringify({
             activeWorkspaceId: srvActiveId,
             viewMode: srvViewMode,
+            bgTone: srvBgTone,
+            bgPattern: srvBgPattern,
             workspaces: srvWorkspaces,
             nodes: srvNodes,
           });
           setWorkspaces(srvWorkspaces);
           setActiveWorkspaceId(srvActiveId);
           setViewMode(srvViewMode);
+          setBgTone(srvBgTone);
+          setBgPattern(srvBgPattern);
           setNodes(srvNodes);
           setLockedEnvelope(null);
           localStorage.setItem(
@@ -451,6 +504,8 @@ export default function App() {
             lastSavedServerSigRef.current = JSON.stringify({
               activeWorkspaceId,
               viewMode,
+              bgTone,
+              bgPattern,
               workspaces,
               nodes,
             });
@@ -463,6 +518,8 @@ export default function App() {
         lastSavedServerSigRef.current = JSON.stringify({
           activeWorkspaceId,
           viewMode,
+          bgTone,
+          bgPattern,
           workspaces,
           nodes,
         });
@@ -474,6 +531,8 @@ export default function App() {
         lastSavedServerSigRef.current = JSON.stringify({
           activeWorkspaceId,
           viewMode,
+          bgTone,
+          bgPattern,
           workspaces,
           nodes,
         });
@@ -494,6 +553,8 @@ export default function App() {
     lockedEnvelope,
     activeWorkspaceId,
     viewMode,
+    bgTone,
+    bgPattern,
     workspaces,
     nodes,
     notify,
@@ -509,7 +570,7 @@ export default function App() {
     ) {
       return;
     }
-    const payload = { activeWorkspaceId, viewMode, workspaces, nodes };
+    const payload = { activeWorkspaceId, viewMode, bgTone, bgPattern, workspaces, nodes };
     const sig = JSON.stringify(payload);
     if (sig === lastSavedServerSigRef.current) return;
 
@@ -538,6 +599,8 @@ export default function App() {
     lockedEnvelope,
     activeWorkspaceId,
     viewMode,
+    bgTone,
+    bgPattern,
     workspaces,
     nodes,
     notify,
@@ -1330,14 +1393,14 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FAFAFA] dark:bg-[#09090B] text-[#09090B] dark:text-[#FAFAFA]">
+    <div className="min-h-screen flex flex-col text-[#09090B] dark:text-[#FAFAFA]">
       <TopBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         searchInputRef={searchInputRef}
         theme={theme}
         onToggleTheme={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
-        onOpenSettings={() => openSettings(extensionActive || bridgeActive ? 'import' : 'bridge')}
+        onOpenSettings={() => openSettings('appearance')}
         onOpenBridge={() => openSettings('bridge')}
         bridgeStatus={
           extensionActive
@@ -1452,16 +1515,17 @@ export default function App() {
                   );
                 })}
 
-                <button
-                  type="button"
-                  onClick={() => setGroupManagerOpen(true)}
-                  aria-label="管理分组"
-                  title="新建、重命名或删除分组"
-                  className="inline-flex items-center gap-1 pb-3 text-[12px] text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-[#FAFAFA] transition-colors whitespace-nowrap shrink-0"
-                >
-                  <Pencil className="w-3 h-3" aria-hidden="true" />
-                  <span>管理分组</span>
-                </button>
+                <Tooltip content="新建、重命名或删除分组">
+                  <button
+                    type="button"
+                    onClick={() => setGroupManagerOpen(true)}
+                    aria-label="管理分组"
+                    className="inline-flex items-center gap-1 pb-3 text-[12px] text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-[#FAFAFA] transition-colors whitespace-nowrap shrink-0"
+                  >
+                    <Pencil className="w-3 h-3" aria-hidden="true" />
+                    <span>管理分组</span>
+                  </button>
+                </Tooltip>
               </div>
 
               <div className="flex items-center gap-2 pb-2">
@@ -1656,6 +1720,16 @@ export default function App() {
         nodes={nodes}
         workspaces={workspaces}
         activeWorkspace={activeWorkspace}
+        theme={theme}
+        bgTone={bgTone}
+        bgPattern={bgPattern}
+        onChangeTheme={setTheme}
+        onChangeBgTone={(nextTone) => {
+          setBgTone(nextTone);
+        }}
+        onChangeBgPattern={(nextPattern) => {
+          setBgPattern(nextPattern);
+        }}
         extensionActive={extensionActive}
         extensionVersion={extensionVersion}
         bridgeActive={bridgeActive}
@@ -1690,8 +1764,10 @@ export default function App() {
         }}
         onOpenBatchImport={() => openSettings('import')}
         onNavigate={(section) => {
+          if (section === 'appearance') openSettings('appearance');
           if (section === 'bridge') openSettings('bridge');
           if (section === 'security') openSettings('security');
+          if (section === 'about') openSettings('about');
         }}
         onToggleTheme={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
       />

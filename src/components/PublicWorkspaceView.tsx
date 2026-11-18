@@ -12,6 +12,7 @@ import {
   Sun,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { Tooltip } from './Tooltip';
 import type { PublicWorkspaceViewData, ViewMode } from '../types/panel';
 import { copyTextToClipboard } from '../utils/crypto';
 import { resolveNodeCustomEntries } from '../utils/workspacePresets';
@@ -147,7 +148,7 @@ export function PublicWorkspaceView({
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FAFAFA] dark:bg-[#09090B] text-[#09090B] dark:text-[#FAFAFA]">
+    <div className="min-h-screen flex flex-col text-[#09090B] dark:text-[#FAFAFA]">
       <header className="sticky top-0 z-30 h-14 bg-white/85 dark:bg-[#09090B]/85 backdrop-blur-md border-b border-[#E4E4E7] dark:border-[#27272A]">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 h-full flex items-center justify-between gap-4 sm:gap-8">
           <span className="font-display text-[15px] font-semibold tracking-[-0.02em] text-[#09090B] dark:text-[#FAFAFA] whitespace-nowrap shrink-0 truncate max-w-[180px] sm:max-w-xs">
@@ -174,19 +175,21 @@ export function PublicWorkspaceView({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.94 }}
-              onClick={onToggleTheme}
-              aria-label={theme === 'light' ? '切换深色模式' : '切换浅色模式'}
-              className="h-8 w-8 inline-flex items-center justify-center text-[#52525B] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#18181B] rounded-lg transition-colors"
-            >
-              {theme === 'light' ? (
-                <Moon className="w-4 h-4" aria-hidden="true" />
-              ) : (
-                <Sun className="w-4 h-4" aria-hidden="true" />
-              )}
-            </motion.button>
+            <Tooltip side="bottom" content={theme === 'light' ? '深色模式' : '浅色模式'}>
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.94 }}
+                onClick={onToggleTheme}
+                aria-label={theme === 'light' ? '切换深色模式' : '切换浅色模式'}
+                className="h-8 w-8 inline-flex items-center justify-center text-[#52525B] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#18181B] rounded-lg transition-colors"
+              >
+                {theme === 'light' ? (
+                  <Moon className="w-4 h-4" aria-hidden="true" />
+                ) : (
+                  <Sun className="w-4 h-4" aria-hidden="true" />
+                )}
+              </motion.button>
+            </Tooltip>
           </div>
         </div>
       </header>
@@ -366,12 +369,11 @@ export function PublicWorkspaceView({
                             {formatHostDisplay(node.targetUrl)}
                           </span>
                           {bottomText && (
-                            <span
-                              className="text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate max-w-[46%] shrink-0"
-                              title={bottomTooltip}
-                            >
-                              {bottomText}
-                            </span>
+                            <Tooltip content={bottomTooltip}>
+                              <span className="text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate max-w-[46%] shrink-0">
+                                {bottomText}
+                              </span>
+                            </Tooltip>
                           )}
                         </div>
                         <span
@@ -429,28 +431,31 @@ export function PublicWorkspaceView({
                             </td>
                             <td className="py-3 px-3 align-middle min-w-0">
                               <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="font-mono text-xs text-[#27272A] dark:text-[#E4E4E7] truncate">
-                                  {node.targetUrl}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyUrl(node.id, node.targetUrl)}
-                                  aria-label={`复制 ${node.name} 地址`}
-                                  className="p-1 text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white rounded shrink-0"
-                                >
-                                  {copiedId === node.id ? (
-                                    <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
-                                  ) : (
-                                    <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-                                  )}
-                                </button>
+                                <Tooltip content={node.targetUrl}>
+                                  <span className="font-mono text-xs text-[#27272A] dark:text-[#E4E4E7] truncate">
+                                    {node.targetUrl}
+                                  </span>
+                                </Tooltip>
+                                <Tooltip content="复制完整地址">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyUrl(node.id, node.targetUrl)}
+                                    aria-label={`复制 ${node.name} 地址`}
+                                    className="p-1 text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white rounded shrink-0"
+                                  >
+                                    {copiedId === node.id ? (
+                                      <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
+                                    ) : (
+                                      <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                                    )}
+                                  </button>
+                                </Tooltip>
                               </div>
                             </td>
-                            <td
-                              className="hidden sm:table-cell py-3 px-3 align-middle text-xs text-[#71717A] truncate"
-                              title={extraText || undefined}
-                            >
-                              {extraText || '—'}
+                            <td className="hidden sm:table-cell py-3 px-3 align-middle text-xs text-[#71717A] truncate">
+                              <Tooltip content={extraText || undefined}>
+                                <span className="block truncate">{extraText || '—'}</span>
+                              </Tooltip>
                             </td>
                             <td className="py-3 px-4 align-middle text-right">
                               <a

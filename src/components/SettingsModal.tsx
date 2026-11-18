@@ -9,24 +9,28 @@ import {
   Loader2,
   Lock,
   LogOut,
+  Moon,
+  Palette,
   Puzzle,
   Shield,
   ShieldAlert,
   ShieldCheck,
+  Sun,
   Trash2,
   Unlock,
   Upload,
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { EncryptedVaultEnvelope, PanelNode, Workspace } from '../types/panel';
+import type { BgPattern, BgTone, EncryptedVaultEnvelope, PanelNode, Workspace } from '../types/panel';
 import { changeAdminPassword } from '../utils/auth';
 import { candidatesToPanelNodes, parseBatchInput } from '../utils/batchParser';
 import { decryptVaultBundle, encryptVaultNodes } from '../utils/crypto';
 import { EXTENSION_VERSION } from '../utils/extensionMeta';
 import { BRIDGE_VERSION, generateUserscriptSource } from '../utils/userscript';
+import { BG_PATTERN_PRESETS, BG_TONE_PRESETS } from '../utils/workspacePresets';
 
-export type SettingsTab = 'bridge' | 'import' | 'security';
+export type SettingsTab = 'appearance' | 'bridge' | 'import' | 'security' | 'about';
 
 interface SettingsModalProps {
   open: boolean;
@@ -34,6 +38,12 @@ interface SettingsModalProps {
   nodes: PanelNode[];
   workspaces: Workspace[];
   activeWorkspace: Workspace;
+  theme: 'light' | 'dark';
+  bgTone: BgTone;
+  bgPattern: BgPattern;
+  onChangeTheme: (theme: 'light' | 'dark') => void;
+  onChangeBgTone: (tone: BgTone) => void;
+  onChangeBgPattern: (pattern: BgPattern) => void;
   extensionActive: boolean;
   extensionVersion?: string | null;
   bridgeActive: boolean;
@@ -56,12 +66,53 @@ const FORMAT_GUIDE_PLACEHOLDER = `文档中心, https://docs.example.com, admin,
 团队网盘, https://drive.example.com, user01, DrivePass#99, , 资料库, 云服务
 本地知识库, http://192.168.10.50:8080, , , /wiki, 默认分组, 内网`;
 
+function getPatternPreviewStyle(pattern: BgPattern, isDark: boolean): React.CSSProperties {
+  const ink = isDark ? 'rgba(250,250,250,0.22)' : 'rgba(9,9,11,0.18)';
+  const line = isDark ? 'rgba(250,250,250,0.14)' : 'rgba(9,9,11,0.11)';
+  if (pattern === 'dots') {
+    return {
+      backgroundImage: `radial-gradient(${ink} 1px, transparent 1px)`,
+      backgroundSize: '8px 8px',
+    };
+  }
+  if (pattern === 'grid') {
+    return {
+      backgroundImage: `linear-gradient(to right, ${line} 1px, transparent 1px), linear-gradient(to bottom, ${line} 1px, transparent 1px)`,
+      backgroundSize: '10px 10px',
+    };
+  }
+  if (pattern === 'paper') {
+    return {
+      backgroundImage: `radial-gradient(${ink} 0.75px, transparent 0.75px), radial-gradient(${line} 0.75px, transparent 0.75px)`,
+      backgroundSize: '6px 6px',
+      backgroundPosition: '0 0, 3px 3px',
+    };
+  }
+  if (pattern === 'lines') {
+    return {
+      backgroundImage: `repeating-linear-gradient(-45deg, ${line} 0px, ${line} 1px, transparent 1px, transparent 6px)`,
+    };
+  }
+  if (pattern === 'rings') {
+    return {
+      backgroundImage: `repeating-radial-gradient(circle at 50% 0%, transparent 0, transparent 9px, ${line} 9px, ${line} 10px)`,
+    };
+  }
+  return {};
+}
+
 export function SettingsModal({
   open,
   initialTab,
   nodes,
   workspaces,
   activeWorkspace,
+  theme,
+  bgTone,
+  bgPattern,
+  onChangeTheme,
+  onChangeBgTone,
+  onChangeBgPattern,
   extensionActive,
   extensionVersion,
   bridgeActive,
@@ -342,15 +393,17 @@ export function SettingsModal({
           >
             {/* Header with editorial underline tabs */}
             <div className="px-6 border-b border-[#E4E4E7] dark:border-[#27272A] flex items-center justify-between gap-4">
-              <div className="flex items-center gap-6">
+              <div className="flex items-center gap-5 sm:gap-6 overflow-x-auto no-scrollbar">
                 <h2 id={`${uid}-title`} className="sr-only">
                   系统设置与工具
                 </h2>
                 {(
                   [
+                    ['appearance', '外观与背景'],
                     ['bridge', '插件与脚本'],
                     ['import', '批量导入'],
                     ['security', '安全与备份'],
+                    ['about', '关于'],
                   ] as Array<[SettingsTab, string]>
                 ).map(([id, label]) => {
                   const active = tab === id;
@@ -400,6 +453,193 @@ export function SettingsModal({
                   transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
                   className="space-y-5"
                 >
+                  {tab === 'appearance' && (
+                    <div className="space-y-5">
+                      {/* Theme Mode Selection */}
+                      <div className="space-y-2.5">
+                        <div className="flex items-center gap-2">
+                          <Palette className="w-4 h-4 text-[#09090B] dark:text-[#FAFAFA]" aria-hidden="true" />
+                          <span className="text-xs font-semibold text-[#09090B] dark:text-[#FAFAFA]">
+                            界面模式
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => onChangeTheme('light')}
+                            aria-pressed={theme === 'light'}
+                            className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-left transition-all ${
+                              theme === 'light'
+                                ? 'border-[#09090B] dark:border-[#FAFAFA] ring-1 ring-inset ring-[#09090B] dark:ring-[#FAFAFA] bg-[#FAFAFA] dark:bg-[#18181B]'
+                                : 'border-[#E4E4E7] dark:border-[#27272A] hover:border-[#A1A1AA] dark:hover:border-[#3F3F46]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <Sun className="w-4 h-4 text-[#09090B] dark:text-[#FAFAFA]" aria-hidden="true" />
+                              <span className="text-xs font-medium text-[#09090B] dark:text-[#FAFAFA]">
+                                浅色模式
+                              </span>
+                            </div>
+                            {theme === 'light' && (
+                              <Check className="w-3.5 h-3.5 text-[#09090B] dark:text-[#FAFAFA] shrink-0" aria-hidden="true" />
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onChangeTheme('dark')}
+                            aria-pressed={theme === 'dark'}
+                            className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-left transition-all ${
+                              theme === 'dark'
+                                ? 'border-[#09090B] dark:border-[#FAFAFA] ring-1 ring-inset ring-[#09090B] dark:ring-[#FAFAFA] bg-[#FAFAFA] dark:bg-[#18181B]'
+                                : 'border-[#E4E4E7] dark:border-[#27272A] hover:border-[#A1A1AA] dark:hover:border-[#3F3F46]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <Moon className="w-4 h-4 text-[#09090B] dark:text-[#FAFAFA]" aria-hidden="true" />
+                              <span className="text-xs font-medium text-[#09090B] dark:text-[#FAFAFA]">
+                                深色模式
+                              </span>
+                            </div>
+                            {theme === 'dark' && (
+                              <Check className="w-3.5 h-3.5 text-[#09090B] dark:text-[#FAFAFA] shrink-0" aria-hidden="true" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Background Tone Palette Selection */}
+                      <div className="pt-4 border-t border-[#E4E4E7] dark:border-[#27272A] space-y-2.5">
+                        <div className="text-xs font-semibold text-[#09090B] dark:text-[#FAFAFA]">
+                          背景色调
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                          {BG_TONE_PRESETS.map((preset) => {
+                            const active = bgTone === preset.id;
+                            const canvasHex = theme === 'dark' ? preset.darkCanvas : preset.lightCanvas;
+                            const surfaceHex = theme === 'dark' ? preset.darkSurface : preset.lightSurface;
+                            const borderHex = theme === 'dark' ? preset.darkBorder : preset.lightBorder;
+                            const mutedHex = theme === 'dark' ? preset.darkMuted : preset.lightMuted;
+
+                            return (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => onChangeBgTone(preset.id)}
+                                aria-pressed={active}
+                                className={`group flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
+                                  active
+                                    ? 'border-[#09090B] dark:border-[#FAFAFA] ring-1 ring-inset ring-[#09090B] dark:ring-[#FAFAFA] bg-[#FAFAFA] dark:bg-[#18181B]'
+                                    : 'border-[#E4E4E7] dark:border-[#27272A] hover:border-[#A1A1AA] dark:hover:border-[#3F3F46]'
+                                }`}
+                              >
+                                <div
+                                  className="w-10 h-9 rounded-lg border shrink-0 p-1 flex flex-col justify-between shadow-2xs"
+                                  style={{
+                                    backgroundColor: canvasHex,
+                                    borderColor: borderHex,
+                                  }}
+                                  aria-hidden="true"
+                                >
+                                  <div
+                                    className="h-1.5 w-5 rounded-xs"
+                                    style={{ backgroundColor: mutedHex }}
+                                  />
+                                  <div
+                                    className="h-3.5 w-full rounded-xs border"
+                                    style={{
+                                      backgroundColor: surfaceHex,
+                                      borderColor: borderHex,
+                                    }}
+                                  />
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-1.5">
+                                    <span className="text-xs font-medium text-[#09090B] dark:text-[#FAFAFA] truncate">
+                                      {preset.name}
+                                    </span>
+                                    {active && (
+                                      <Check
+                                        className="w-3.5 h-3.5 text-[#09090B] dark:text-[#FAFAFA] shrink-0"
+                                        aria-hidden="true"
+                                      />
+                                    )}
+                                  </div>
+                                  <p className="mt-0.5 text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate">
+                                    {preset.subtitle}
+                                  </p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Background Pattern / Texture Accents */}
+                      <div className="pt-4 border-t border-[#E4E4E7] dark:border-[#27272A] space-y-2.5">
+                        <div className="text-xs font-semibold text-[#09090B] dark:text-[#FAFAFA]">
+                          背景纹理
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                          {BG_PATTERN_PRESETS.map((pat) => {
+                            const active = bgPattern === pat.id;
+                            const activeTone =
+                              BG_TONE_PRESETS.find((t) => t.id === bgTone) ?? BG_TONE_PRESETS[0];
+                            const canvasHex =
+                              theme === 'dark' ? activeTone.darkCanvas : activeTone.lightCanvas;
+                            const borderHex =
+                              theme === 'dark' ? activeTone.darkBorder : activeTone.lightBorder;
+
+                            return (
+                              <button
+                                key={pat.id}
+                                type="button"
+                                onClick={() => onChangeBgPattern(pat.id)}
+                                aria-pressed={active}
+                                className={`group flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
+                                  active
+                                    ? 'border-[#09090B] dark:border-[#FAFAFA] ring-1 ring-inset ring-[#09090B] dark:ring-[#FAFAFA] bg-[#FAFAFA] dark:bg-[#18181B]'
+                                    : 'border-[#E4E4E7] dark:border-[#27272A] hover:border-[#A1A1AA] dark:hover:border-[#3F3F46]'
+                                }`}
+                              >
+                                <div
+                                  className="w-10 h-9 rounded-lg border shrink-0 overflow-hidden shadow-2xs"
+                                  style={{
+                                    backgroundColor: canvasHex,
+                                    borderColor: borderHex,
+                                    ...getPatternPreviewStyle(pat.id, theme === 'dark'),
+                                  }}
+                                  aria-hidden="true"
+                                />
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-1.5">
+                                    <span className="text-xs font-medium text-[#09090B] dark:text-[#FAFAFA] truncate">
+                                      {pat.name}
+                                    </span>
+                                    {active && (
+                                      <Check
+                                        className="w-3.5 h-3.5 text-[#09090B] dark:text-[#FAFAFA] shrink-0"
+                                        aria-hidden="true"
+                                      />
+                                    )}
+                                  </div>
+                                  <p className="mt-0.5 text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate">
+                                    {pat.subtitle}
+                                  </p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {tab === 'bridge' && (
                     <div className="space-y-6">
                       {/* Primary: Dedicated Browser Extension (MV3) */}
@@ -915,6 +1155,73 @@ export function SettingsModal({
                             <span>清空数据</span>
                           </button>
                         )}
+                      </div>
+                    </div>
+                  )}
+
+                  {tab === 'about' && (
+                    <div className="space-y-5">
+                      <div className="flex items-baseline justify-between gap-3 pb-4 border-b border-[#E4E4E7] dark:border-[#27272A]">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-display text-base font-semibold text-[#09090B] dark:text-[#FAFAFA]">
+                              Waymark
+                            </span>
+                            <span className="font-mono text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
+                              v{EXTENSION_VERSION}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-[#71717A] dark:text-[#A1A1AA] leading-relaxed">
+                            轻量、自托管的多工作空间站点导航与自动登录管理台，专注高频后台与书签的极速直达。
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="p-3.5 rounded-xl border border-[#E4E4E7] dark:border-[#27272A] bg-[#FAFAFA] dark:bg-[#18181B]/60 space-y-1">
+                          <div className="text-xs font-semibold text-[#09090B] dark:text-[#FAFAFA]">
+                            多空间与拖拽编排
+                          </div>
+                          <p className="text-[11px] text-[#71717A] dark:text-[#A1A1AA] leading-relaxed">
+                            按团队、环境或用途划分独立工作空间，支持分组筛选、置顶优先与卡片自由拖拽排序。
+                          </p>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-[#E4E4E7] dark:border-[#27272A] bg-[#FAFAFA] dark:bg-[#18181B]/60 space-y-1">
+                          <div className="text-xs font-semibold text-[#09090B] dark:text-[#FAFAFA]">
+                            一键填充与连通检测
+                          </div>
+                          <p className="text-[11px] text-[#71717A] dark:text-[#A1A1AA] leading-relaxed">
+                            配合浏览器插件或脚本，跨站自动填充表单或 Basic 认证凭据，并支持内网与 HTTP 连通性探测。
+                          </p>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-[#E4E4E7] dark:border-[#27272A] bg-[#FAFAFA] dark:bg-[#18181B]/60 space-y-1">
+                          <div className="text-xs font-semibold text-[#09090B] dark:text-[#FAFAFA]">
+                            自定义字段与公开分享
+                          </div>
+                          <p className="text-[11px] text-[#71717A] dark:text-[#A1A1AA] leading-relaxed">
+                            每个空间可独立配置补充信息字段名及展示位置，并支持绑定独立域名或路由免登录公开访问（自动脱敏凭据）。
+                          </p>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-[#E4E4E7] dark:border-[#27272A] bg-[#FAFAFA] dark:bg-[#18181B]/60 space-y-1">
+                          <div className="text-xs font-semibold text-[#09090B] dark:text-[#FAFAFA]">
+                            跨端同步与加密备份
+                          </div>
+                          <p className="text-[11px] text-[#71717A] dark:text-[#A1A1AA] leading-relaxed">
+                            支持服务端持久化同步、本地 AES-256-GCM 凭据加密锁以及加密 JSON / CSV 批量导入导出。
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
+                        <span>
+                          当前统计：{workspaces.length} 个工作空间 · {nodes.length} 个站点
+                        </span>
+                        <span className="font-mono">
+                          快捷键：⌘K 全局搜索 · / 聚焦搜索 · Esc 关闭弹窗
+                        </span>
                       </div>
                     </div>
                   )}

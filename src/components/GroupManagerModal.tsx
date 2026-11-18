@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { Tooltip } from './Tooltip';
 
 interface GroupManagerModalProps {
   open: boolean;
@@ -171,28 +172,30 @@ export function GroupManagerModal({
                               </span>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingGroup(grp.name);
-                                  setEditValue(grp.name);
-                                }}
-                                aria-label={`重命名分组 ${grp.name}`}
-                                title="重命名"
-                                className="p-1.5 text-[#71717A] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#1F1F23] rounded-md transition-colors"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              {!isDefault && (
+                              <Tooltip content="重命名">
                                 <button
                                   type="button"
-                                  onClick={() => onDeleteGroup(grp.name)}
-                                  aria-label={`删除分组 ${grp.name}`}
-                                  title="删除分组"
-                                  className="p-1.5 text-[#71717A] hover:text-[#DC2626] dark:hover:text-[#F87171] hover:bg-[#FEF2F2] dark:hover:bg-[#2B1414] rounded-md transition-colors"
+                                  onClick={() => {
+                                    setEditingGroup(grp.name);
+                                    setEditValue(grp.name);
+                                  }}
+                                  aria-label={`重命名分组 ${grp.name}`}
+                                  className="p-1.5 text-[#71717A] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#1F1F23] rounded-md transition-colors"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Pencil className="w-3.5 h-3.5" />
                                 </button>
+                              </Tooltip>
+                              {!isDefault && (
+                                <Tooltip content="删除分组">
+                                  <button
+                                    type="button"
+                                    onClick={() => onDeleteGroup(grp.name)}
+                                    aria-label={`删除分组 ${grp.name}`}
+                                    className="p-1.5 text-[#71717A] hover:text-[#DC2626] dark:hover:text-[#F87171] hover:bg-[#FEF2F2] dark:hover:bg-[#2B1414] rounded-md transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </Tooltip>
                               )}
                             </div>
                           </>

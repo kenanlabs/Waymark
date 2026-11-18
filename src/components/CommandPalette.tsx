@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Command, Moon, Plus, Search, Shield, Sun, Upload, X } from 'lucide-react';
+import { ArrowUpRight, Command, Moon, Palette, Plus, Search, Shield, Sun, Upload, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { NavSection, PanelNode, Workspace } from '../types/panel';
 import { buildBridgeLaunchUrl, buildPanelTargetUrl } from '../utils/userscript';
@@ -269,9 +269,20 @@ export function CommandPalette({
                     type="button"
                     onClick={() => {
                       onClose();
+                      onNavigate('appearance');
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 text-xs text-left text-[#3F3F46] dark:text-[#D4D4D8] hover:bg-[#F4F4F5] dark:hover:bg-[#1C1C1F] rounded-lg transition-colors"
+                  >
+                    <Palette className="w-3.5 h-3.5 text-[#71717A]" aria-hidden="true" />
+                    <span>外观与背景设置</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
                       onNavigate('security');
                     }}
-                    className="flex items-center gap-2 px-3 py-2 text-xs text-left text-[#3F3F46] dark:text-[#D4D4D8] hover:bg-[#F4F4F5] dark:hover:bg-[#1C1C1F] rounded-lg transition-colors col-span-2"
+                    className="flex items-center gap-2 px-3 py-2 text-xs text-left text-[#3F3F46] dark:text-[#D4D4D8] hover:bg-[#F4F4F5] dark:hover:bg-[#1C1C1F] rounded-lg transition-colors"
                   >
                     <Shield className="w-3.5 h-3.5 text-[#71717A]" aria-hidden="true" />
                     <span>管理员安全与数据备份</span>

@@ -14,6 +14,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { Tooltip } from './Tooltip';
 import type { PanelNode, PanelType, WorkspaceCustomFieldDef } from '../types/panel';
 import { buildBridgeLaunchUrl, buildPanelTargetUrl } from '../utils/userscript';
 import { resolveNodeCustomEntries } from '../utils/workspacePresets';
@@ -44,45 +45,41 @@ function renderProbeStatus(node: PanelNode) {
   }
   if (probe.status === 'auth_ok' || probe.status === 'reachable') {
     return (
-      <span
-        className="inline-flex items-center gap-1 text-[12px] text-[#16A34A] dark:text-[#4ADE80] tabular-nums"
-        title={probe.message}
-      >
-        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-        <span>{probe.latencyMs ?? 0} ms</span>
-      </span>
+      <Tooltip content={probe.message}>
+        <span className="inline-flex items-center gap-1 text-[12px] text-[#16A34A] dark:text-[#4ADE80] tabular-nums cursor-default">
+          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          <span>{probe.latencyMs ?? 0} ms</span>
+        </span>
+      </Tooltip>
     );
   }
   if (probe.status === 'auth_failed') {
     return (
-      <span
-        className="inline-flex items-center gap-1 text-[12px] text-[#D97706] dark:text-[#FBBF24]"
-        title={probe.message}
-      >
-        <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-        <span>待核对</span>
-      </span>
+      <Tooltip content={probe.message}>
+        <span className="inline-flex items-center gap-1 text-[12px] text-[#D97706] dark:text-[#FBBF24] cursor-default">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          <span>待核对</span>
+        </span>
+      </Tooltip>
     );
   }
   if (probe.status === 'blocked') {
     return (
-      <span
-        className="inline-flex items-center gap-1 text-[12px] text-[#D97706] dark:text-[#FBBF24]"
-        title={probe.message}
-      >
-        <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-        <span>受限</span>
-      </span>
+      <Tooltip content={probe.message}>
+        <span className="inline-flex items-center gap-1 text-[12px] text-[#D97706] dark:text-[#FBBF24] cursor-default">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          <span>受限</span>
+        </span>
+      </Tooltip>
     );
   }
   return (
-    <span
-      className="inline-flex items-center gap-1 text-[12px] text-[#DC2626] dark:text-[#F87171]"
-      title={probe.message}
-    >
-      <WifiOff className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-      <span>不可达</span>
-    </span>
+    <Tooltip content={probe.message}>
+      <span className="inline-flex items-center gap-1 text-[12px] text-[#DC2626] dark:text-[#F87171] cursor-default">
+        <WifiOff className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+        <span>不可达</span>
+      </span>
+    </Tooltip>
   );
 }
 
@@ -156,118 +153,119 @@ export function PanelTable({
                 className="group hover:bg-[#FAFAFA] dark:hover:bg-[#18181B] transition-colors duration-100"
               >
                 <td className="py-3 pl-3 pr-1 align-middle">
-                  <button
-                    type="button"
-                    onClick={() => onTogglePin(node)}
-                    aria-label={node.pinned ? `取消置顶 ${node.name}` : `置顶 ${node.name}`}
-                    title={node.pinned ? '取消置顶' : '置顶'}
-                    className={`p-1 rounded-md transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white ${
-                      node.pinned
-                        ? 'text-[#2563EB] dark:text-[#60A5FA] opacity-100'
-                        : 'text-[#A1A1AA] opacity-30 group-hover:opacity-100 hover:text-[#09090B] dark:hover:text-white'
-                    }`}
-                  >
-                    <Pin className="w-3.5 h-3.5" aria-hidden="true" />
-                  </button>
+                  <Tooltip content={node.pinned ? '取消置顶' : '置顶'}>
+                    <button
+                      type="button"
+                      onClick={() => onTogglePin(node)}
+                      aria-label={node.pinned ? `取消置顶 ${node.name}` : `置顶 ${node.name}`}
+                      className={`p-1 rounded-md transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white ${
+                        node.pinned
+                          ? 'text-[#2563EB] dark:text-[#60A5FA] opacity-100'
+                          : 'text-[#A1A1AA] opacity-30 group-hover:opacity-100 hover:text-[#09090B] dark:hover:text-white'
+                      }`}
+                    >
+                      <Pin className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  </Tooltip>
                 </td>
 
                 <td className="py-3 px-2.5 align-middle min-w-0">
                   <div className="font-medium text-[13px] text-[#09090B] dark:text-[#FAFAFA] truncate">
                     {node.name}
                   </div>
-                  <div
-                    className="mt-0.5 text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate"
-                    title={groupLine}
-                  >
-                    {groupLine}
-                  </div>
-                  {detailLine && (
-                    <div
-                      className="mt-0.5 text-[11px] text-[#A1A1AA] dark:text-[#71717A] truncate"
-                      title={detailLine}
-                    >
-                      {detailLine}
+                  <Tooltip content={topEntries.length > 0 ? groupLine : undefined}>
+                    <div className="mt-0.5 text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate">
+                      {groupLine}
                     </div>
+                  </Tooltip>
+                  {detailLine && (
+                    <Tooltip content={detailLine}>
+                      <div className="mt-0.5 text-[11px] text-[#A1A1AA] dark:text-[#71717A] truncate">
+                        {detailLine}
+                      </div>
+                    </Tooltip>
                   )}
                 </td>
 
                 <td className="py-3 px-2.5 align-middle min-w-0">
                   <div className="flex items-center gap-1 min-w-0">
-                    <span
-                      className="font-mono text-[12px] text-[#27272A] dark:text-[#E4E4E7] truncate"
-                      title={targetUrl}
-                    >
-                      {targetUrl}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleInlineCopy(`url-${node.id}`, '访问地址', targetUrl)}
-                      aria-label={`复制 ${node.name} 访问地址`}
-                      title="复制完整地址"
-                      className="p-1 rounded text-[#A1A1AA] opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-[#09090B] dark:hover:text-white transition-opacity shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
-                    >
-                      {copiedKey === `url-${node.id}` ? (
-                        <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-                      )}
-                    </button>
+                    <Tooltip content={targetUrl}>
+                      <span className="font-mono text-[12px] text-[#27272A] dark:text-[#E4E4E7] truncate">
+                        {targetUrl}
+                      </span>
+                    </Tooltip>
+                    <Tooltip content="复制完整地址">
+                      <button
+                        type="button"
+                        onClick={() => handleInlineCopy(`url-${node.id}`, '访问地址', targetUrl)}
+                        aria-label={`复制 ${node.name} 访问地址`}
+                        className="p-1 rounded text-[#A1A1AA] opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-[#09090B] dark:hover:text-white transition-opacity shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
+                      >
+                        {copiedKey === `url-${node.id}` ? (
+                          <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                        )}
+                      </button>
+                    </Tooltip>
                   </div>
                   {urlSubLine && (
-                    <div
-                      className="mt-0.5 text-[11px] text-[#A1A1AA] truncate"
-                      title={urlSubLine}
-                    >
-                      {urlSubLine}
-                    </div>
+                    <Tooltip content={urlSubLine}>
+                      <div className="mt-0.5 text-[11px] text-[#A1A1AA] truncate">
+                        {urlSubLine}
+                      </div>
+                    </Tooltip>
                   )}
                 </td>
 
                 <td className="py-3 px-2.5 align-middle min-w-0">
                   {node.username || node.password ? (
                     <div className="flex items-center gap-1 min-w-0">
-                      <button
-                        type="button"
-                        onClick={() => handleInlineCopy(`user-${node.id}`, '用户名', node.username)}
-                        title={`复制用户名: ${node.username}`}
-                        aria-label={`复制 ${node.name} 用户名`}
-                        className="font-mono text-[12px] text-[#09090B] dark:text-[#FAFAFA] hover:text-[#2563EB] dark:hover:text-[#60A5FA] transition-colors truncate max-w-[90px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] rounded"
-                      >
-                        {copiedKey === `user-${node.id}` ? '已复制' : node.username || '—'}
-                      </button>
+                      <Tooltip content={node.username ? `复制用户名: ${node.username}` : undefined}>
+                        <button
+                          type="button"
+                          onClick={() => handleInlineCopy(`user-${node.id}`, '用户名', node.username)}
+                          aria-label={`复制 ${node.name} 用户名`}
+                          className="font-mono text-[12px] text-[#09090B] dark:text-[#FAFAFA] hover:text-[#2563EB] dark:hover:text-[#60A5FA] transition-colors truncate max-w-[90px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] rounded"
+                        >
+                          {copiedKey === `user-${node.id}` ? '已复制' : node.username || '—'}
+                        </button>
+                      </Tooltip>
                       <span className="text-[#D4D4D8] dark:text-[#3F3F46] shrink-0" aria-hidden="true">
                         /
                       </span>
                       <span className="font-mono text-[12px] text-[#71717A] dark:text-[#A1A1AA] truncate min-w-0">
                         {isRevealed ? node.password || '—' : '••••••'}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setRevealedIds((p) => ({ ...p, [node.id]: !p[node.id] }))}
-                        aria-label={isRevealed ? `隐藏 ${node.name} 密码` : `显示 ${node.name} 密码`}
-                        title={isRevealed ? '隐藏密码' : '显示密码'}
-                        className="p-1 text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white rounded shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
-                      >
-                        {isRevealed ? (
-                          <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />
-                        ) : (
-                          <Eye className="w-3.5 h-3.5" aria-hidden="true" />
-                        )}
-                      </button>
-                      {node.password && (
+                      <Tooltip content={isRevealed ? '隐藏密码' : '显示密码'}>
                         <button
                           type="button"
-                          onClick={() => handleInlineCopy(`pass-${node.id}`, '密码', node.password)}
-                          aria-label={`复制 ${node.name} 密码`}
-                          title="复制密码"
+                          onClick={() => setRevealedIds((p) => ({ ...p, [node.id]: !p[node.id] }))}
+                          aria-label={isRevealed ? `隐藏 ${node.name} 密码` : `显示 ${node.name} 密码`}
                           className="p-1 text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white rounded shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
                         >
-                          {copiedKey === `pass-${node.id}` ? (
-                            <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
+                          {isRevealed ? (
+                            <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />
                           ) : (
-                            <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                            <Eye className="w-3.5 h-3.5" aria-hidden="true" />
                           )}
                         </button>
+                      </Tooltip>
+                      {node.password && (
+                        <Tooltip content="复制密码">
+                          <button
+                            type="button"
+                            onClick={() => handleInlineCopy(`pass-${node.id}`, '密码', node.password)}
+                            aria-label={`复制 ${node.name} 密码`}
+                            className="p-1 text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white rounded shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
+                          >
+                            {copiedKey === `pass-${node.id}` ? (
+                              <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                            )}
+                          </button>
+                        </Tooltip>
                       )}
                     </div>
                   ) : (
@@ -281,25 +279,27 @@ export function PanelTable({
 
                 <td className="py-3 pl-2 pr-3.5 align-middle text-right">
                   <div className="inline-flex items-center justify-end gap-1">
-                    <button
-                      type="button"
-                      onClick={() => onProbe(node)}
-                      disabled={node.probe?.status === 'checking'}
-                      title="测试浏览器连通性"
-                      aria-label={`检测 ${node.name} 连通性`}
-                      className="p-1.5 text-[#71717A] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#27272A] rounded-md transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
-                    >
-                      <Activity className="w-3.5 h-3.5" aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onEdit(node)}
-                      title="编辑站点配置"
-                      aria-label={`编辑 ${node.name}`}
-                      className="p-1.5 text-[#71717A] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#27272A] rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
-                    >
-                      <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-                    </button>
+                    <Tooltip content="测试浏览器连通性">
+                      <button
+                        type="button"
+                        onClick={() => onProbe(node)}
+                        disabled={node.probe?.status === 'checking'}
+                        aria-label={`检测 ${node.name} 连通性`}
+                        className="p-1.5 text-[#71717A] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#27272A] rounded-md transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
+                      >
+                        <Activity className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="编辑站点配置">
+                      <button
+                        type="button"
+                        onClick={() => onEdit(node)}
+                        aria-label={`编辑 ${node.name}`}
+                        className="p-1.5 text-[#71717A] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#27272A] rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
+                      >
+                        <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </Tooltip>
                     <a
                       href={launchUrl}
                       target="_blank"

@@ -80,6 +80,17 @@ services:
 | `ADMIN_PASSWORD` | 未设置 | 可选，预设管理员密码；与 `ADMIN_USERNAME` 配合使用 |
 | `SESSION_SECRET` | 随机生成 | 建议在生产环境显式指定固定随机字符串，避免重启容器后登录态失效 |
 
+#### 方式三：Cloudflare Pages 部署
+
+项目已内置 **Cloudflare Pages Functions**（`/functions/api/[[path]].ts`）与构建期静态资源打包（自动生成 `dist/waymark-extension.zip` 与 `dist/waymark-bridge.user.js`）：
+
+1. 在 Cloudflare Pages 创建项目并连接 Git 仓库：
+   - **构建命令（Build command）**：`npm run build`
+   - **构建输出目录（Build output directory）**：`dist`
+2. **存储与认证模式（二选一）**：
+   - **跨设备云端同步模式（推荐）**：在 Cloudflare Pages 项目设置 → **Functions** → **KV 命名空间绑定（KV namespace bindings）** 中，添加变量名为 `WAYMARK_KV` 的 KV 命名空间。绑定后，管理员账号、工作空间、节点配置与公开工作空间将持久保存在 Cloudflare KV 中。
+   - **零配置本地模式**：若未绑定 `WAYMARK_KV`，系统会自动降级为浏览器本地加密存储模式（基于 Web Crypto 哈希校验与 `localStorage`），不会出现 `405 Method Not Allowed` 报错，同样支持创建管理员、登录及下载浏览器插件。
+
 ---
 
 ### 反向代理与独立域名配置

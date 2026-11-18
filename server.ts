@@ -69,6 +69,8 @@ interface ServerWorkspaceState {
   version: 1;
   activeWorkspaceId?: string;
   viewMode?: 'grid' | 'table';
+  bgTone?: string;
+  bgPattern?: string;
   workspaces: Array<Record<string, unknown>>;
   nodes: Array<Record<string, unknown>>;
   updatedAt: string;
@@ -837,6 +839,8 @@ async function startServer(): Promise<void> {
     const body = req.body as {
       activeWorkspaceId?: string;
       viewMode?: string;
+      bgTone?: string;
+      bgPattern?: string;
       workspaces?: unknown;
       nodes?: unknown;
     };
@@ -853,6 +857,24 @@ async function startServer(): Promise<void> {
     const updatedAt = new Date().toISOString();
     const viewMode =
       body.viewMode === 'table' || body.viewMode === 'grid' ? body.viewMode : undefined;
+    const bgTone =
+      body.bgTone === 'pure' ||
+      body.bgTone === 'paper' ||
+      body.bgTone === 'sage' ||
+      body.bgTone === 'stone' ||
+      body.bgTone === 'oat' ||
+      body.bgTone === 'mist'
+        ? body.bgTone
+        : undefined;
+    const bgPattern =
+      body.bgPattern === 'none' ||
+      body.bgPattern === 'dots' ||
+      body.bgPattern === 'grid' ||
+      body.bgPattern === 'paper' ||
+      body.bgPattern === 'lines' ||
+      body.bgPattern === 'rings'
+        ? body.bgPattern
+        : undefined;
     const nextState: ServerWorkspaceState = {
       version: 1,
       activeWorkspaceId:
@@ -860,6 +882,8 @@ async function startServer(): Promise<void> {
           ? body.activeWorkspaceId.trim()
           : undefined,
       viewMode,
+      bgTone,
+      bgPattern,
       workspaces: body.workspaces as Array<Record<string, unknown>>,
       nodes: body.nodes as Array<Record<string, unknown>>,
       updatedAt,

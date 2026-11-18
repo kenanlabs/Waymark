@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { ArrowUpRight, Check, Copy, Eye, Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { CustomSelect } from './CustomSelect';
+import { Tooltip } from './Tooltip';
 import type {
   CustomFieldPlacement,
   Workspace,
@@ -462,20 +463,21 @@ export function WorkspaceModal({
                               {fullPublicUrl}
                             </span>
                             <div className="flex items-center gap-1 shrink-0">
-                              <button
-                                type="button"
-                                onClick={handleCopyPublicUrl}
-                                aria-label="复制公开访问地址"
-                                title="复制地址"
-                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-[#52525B] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white hover:bg-white dark:hover:bg-[#27272A] rounded-md transition-colors"
-                              >
-                                {copiedUrl ? (
-                                  <Check className="w-3 h-3 text-[#16A34A]" aria-hidden="true" />
-                                ) : (
-                                  <Copy className="w-3 h-3" aria-hidden="true" />
-                                )}
-                                <span>{copiedUrl ? '已复制' : '复制'}</span>
-                              </button>
+                              <Tooltip content="复制公开访问地址">
+                                <button
+                                  type="button"
+                                  onClick={handleCopyPublicUrl}
+                                  aria-label="复制公开访问地址"
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-[#52525B] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white hover:bg-white dark:hover:bg-[#27272A] rounded-md transition-colors"
+                                >
+                                  {copiedUrl ? (
+                                    <Check className="w-3 h-3 text-[#16A34A]" aria-hidden="true" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" aria-hidden="true" />
+                                  )}
+                                  <span>{copiedUrl ? '已复制' : '复制'}</span>
+                                </button>
+                              </Tooltip>
                             </div>
                           </div>
 
