@@ -23,6 +23,8 @@ RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force \
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.ts ./server.ts
 COPY --from=builder /app/src/utils/userscript.ts ./src/utils/userscript.ts
+COPY --from=builder /app/src/utils/extension.ts ./src/utils/extension.ts
+COPY --from=builder /app/src/utils/extensionMeta.ts ./src/utils/extensionMeta.ts
 COPY --from=builder /app/src/types/panel.ts ./src/types/panel.ts
 
 USER node

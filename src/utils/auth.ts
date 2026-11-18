@@ -12,6 +12,11 @@ import {
   BRIDGE_PROBE_RESULT_EVENT,
   BRIDGE_VERSION,
 } from './userscript';
+import {
+  EXTENSION_PROBE_REQUEST,
+  EXTENSION_PROBE_RESULT,
+  EXTENSION_VERSION,
+} from './extensionMeta';
 
 const ADMIN_TOKEN_KEY = 'paneldeck_admin_token_v1';
 
@@ -190,15 +195,86 @@ export async function probePanelNode(params: {
     parsed.hostname === 'localhost' ||
     parsed.hostname === '127.0.0.1' ||
     parsed.hostname === '[::1]';
+  const extensionVersion = getExtensionVersion();
   const bridgeVersion = getBridgeVersion();
   const bridgeStale =
-    Boolean(bridgeVersion) && !isVersionAtLeast(bridgeVersion, BRIDGE_VERSION);
+    !extensionVersion && Boolean(bridgeVersion) && !isVersionAtLeast(bridgeVersion, BRIDGE_VERSION);
   const bridgeNotResponding =
-    '桥接脚本未响应。请刷新 Waymark 页面、关闭旧目标标签页，并确认脚本为最新版后重试。';
+    '脚本或插件未响应。请刷新 Waymark 页面后重试，或下载安装最新版 Waymark 浏览器插件。';
   let bridgeUnsupported = false;
   let bridged: BridgeProbeResponse | null = null;
 
   try {
+    if (extensionVersion) {
+      const extResp = await probeViaExtension({
+        url: targetUrl,
+        timeoutMs,
+        panelType: params.panelType,
+        entrance: cleanedEntrance,
+        username: params.username,
+        password: params.password,
+        version: params.version,
+        verifyAuth: params.verifyAuth,
+      });
+      if (extResp?.bridged && extResp.result) {
+        const extResult = extResp.result;
+        const latencyMs = extResult.latencyMs || elapsedMs();
+        if (extResult.ok) {
+          if (extResult.authStatus === 'auth_ok') {
+            return {
+              status: 'auth_ok',
+              httpStatus: extResult.status,
+              latencyMs,
+              message: `${extResult.authMessage || '插件检测连通且凭据有效'} (${latencyMs} ms)`,
+              checkedAt: new Date().toISOString(),
+            };
+          }
+          if (extResult.authStatus === 'auth_failed') {
+            return {
+              status: 'auth_failed',
+              httpStatus: extResult.status,
+              latencyMs,
+              message: `${extResult.authMessage || '目标可达，但凭据校验未通过'} (${latencyMs} ms)`,
+              checkedAt: new Date().toISOString(),
+            };
+          }
+          const httpStatus = Number(extResult.status) || 0;
+          if (httpStatus === 404) {
+            return {
+              status: 'unreachable',
+              httpStatus: 404,
+              latencyMs,
+              message: `插件检测：返回 404，请核对入口路径是否正确 (${latencyMs} ms)`,
+              checkedAt: new Date().toISOString(),
+            };
+          }
+          if (httpStatus > 0) {
+            return {
+              status: 'reachable',
+              httpStatus,
+              latencyMs,
+              message: `插件检测可达 · HTTP ${httpStatus} (${latencyMs} ms)`,
+              checkedAt: new Date().toISOString(),
+            };
+          }
+        }
+        if (extResult.error === 'timeout') {
+          return {
+            status: 'unreachable',
+            latencyMs,
+            message: '插件检测超时 (6s)，请检查目标地址、端口或网络连通性。',
+            checkedAt: new Date().toISOString(),
+          };
+        }
+        return {
+          status: 'unreachable',
+          latencyMs,
+          message: extResult.message || '插件检测：目标无法连接，请检查地址或自签名证书。',
+          checkedAt: new Date().toISOString(),
+        };
+      }
+    }
+
     bridged = await probeViaBridge(targetUrl, timeoutMs);
     if (bridged?.bridged && bridged.result) {
       const bridgeResult = bridged.result;
@@ -227,7 +303,7 @@ export async function probePanelNode(params: {
           return {
             status: 'blocked',
             latencyMs,
-            message: '脚本已收到响应，但无法读取 HTTP 状态码；该站点可能仍在加载，请点击卡片直接打开验证。',
+            message: '脚本已收到响应，但无法读取 HTTP 状态码；推荐改用 Waymark 浏览器插件进行无限制检测。',
             checkedAt: new Date().toISOString(),
           };
         }
@@ -251,12 +327,12 @@ export async function probePanelNode(params: {
 
     if (isHttpsPage && parsed.protocol === 'http:' && !isLocalTarget) {
       const bridgeHint = bridgeStale
-        ? `检测到旧版脚本 ${bridgeVersion}，请刷新本页并重新安装 ${BRIDGE_VERSION} 后使用脚本代理检测。`
+        ? `检测到旧版脚本 ${bridgeVersion}，请更新至 ${BRIDGE_VERSION} 或改用 Waymark 浏览器插件。`
         : bridgeUnsupported
-          ? '当前脚本未获得跨域请求权限，请在 Tampermonkey 中允许该脚本访问目标域名后重试。'
+          ? '当前脚本未获得跨域请求权限，建议改用 Waymark 浏览器插件或允许脚本访问目标域名。'
           : bridged
           ? bridgeNotResponding
-          : '未在当前页面检测到脚本。若刚安装/更新脚本，请刷新本页并关闭旧目标标签页后重试；未安装脚本时请点击卡片直接打开验证。';
+          : '建议在右上角设置中下载安装「Waymark 浏览器插件」，即可直接探测 HTTP 与内网地址。';
       return {
         status: 'blocked',
         latencyMs: 0,
@@ -325,12 +401,12 @@ export async function probePanelNode(params: {
 
     if (isHttpsPage && parsed.protocol === 'http:' && !isLocalTarget) {
       const bridgeHint = bridgeStale
-        ? `检测到旧版脚本 ${bridgeVersion}，请刷新本页并重新安装 ${BRIDGE_VERSION} 后使用脚本代理检测。`
+        ? `检测到旧版脚本 ${bridgeVersion}，请更新至 ${BRIDGE_VERSION} 或改用 Waymark 浏览器插件。`
         : bridgeUnsupported
-          ? '当前脚本未获得跨域请求权限，请在 Tampermonkey 中允许该脚本访问目标域名后重试。'
+          ? '当前脚本未获得跨域请求权限，建议改用 Waymark 浏览器插件。'
           : bridged
           ? bridgeNotResponding
-          : '未在当前页面检测到脚本。若刚安装/更新脚本，请刷新本页并关闭旧目标标签页后重试。';
+          : '建议在右上角设置中安装「Waymark 浏览器插件」，即可直接探测 HTTP 目标。';
       return {
         status: 'blocked',
         latencyMs,
@@ -349,7 +425,7 @@ export async function probePanelNode(params: {
         status: 'blocked',
         latencyMs,
         message:
-          '目标位于内网/保留地址，浏览器私有网络访问（PNA）策略阻止了当前公网页面直连。请在内网环境访问 Waymark，或安装脚本后由脚本代理检测。',
+          '目标位于内网/保留地址，浏览器私有网络访问（PNA）策略阻止了直连。请安装 Waymark 浏览器插件后即可无限制检测。',
         checkedAt: new Date().toISOString(),
       };
     }
@@ -380,6 +456,9 @@ interface BridgeProbeResult {
   status?: number;
   statusText?: string;
   finalUrl?: string;
+  latencyMs?: number;
+  authStatus?: 'auth_ok' | 'auth_failed';
+  authMessage?: string;
   error?: string;
   message?: string;
   unsupported?: boolean;
@@ -410,6 +489,15 @@ function isVersionAtLeast(current: string | null, minimum: string): boolean {
     if (left < right) return false;
   }
   return true;
+}
+
+function getExtensionVersion(): string | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    return document.documentElement.getAttribute('data-waymark-extension');
+  } catch {
+    return null;
+  }
 }
 
 function getBridgeVersion(): string | null {
@@ -445,6 +533,82 @@ function isPrivateHostname(hostname: string): boolean {
   return false;
 }
 
+function probeViaExtension(params: {
+  url: string;
+  timeoutMs: number;
+  panelType?: PanelType;
+  entrance?: string;
+  username?: string;
+  password?: string;
+  version?: PanelVersion;
+  verifyAuth?: boolean;
+}): Promise<BridgeProbeResponse | null> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return Promise.resolve(null);
+  }
+  const version = getExtensionVersion();
+  if (!version || !isVersionAtLeast(version, EXTENSION_VERSION)) {
+    return Promise.resolve(null);
+  }
+
+  const requestId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `wm-ext-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  return new Promise<BridgeProbeResponse>((resolve) => {
+    let settled = false;
+    let timer = 0;
+
+    const cleanup = () => {
+      window.removeEventListener('message', onMessage);
+      if (timer) window.clearTimeout(timer);
+    };
+
+    const finish = (response: BridgeProbeResponse) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(response);
+    };
+
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.source !== window || !ev.data || typeof ev.data !== 'object') return;
+      if (ev.data.source === 'waymark-extension' && ev.data.type === EXTENSION_PROBE_RESULT) {
+        if (ev.data.requestId !== requestId) return;
+        finish({ bridged: true, result: (ev.data.result || {}) as BridgeProbeResult });
+      }
+    };
+
+    timer = window.setTimeout(
+      () => finish({ bridged: false, reason: 'timeout' }),
+      params.timeoutMs + 2500
+    );
+    window.addEventListener('message', onMessage);
+
+    try {
+      window.postMessage(
+        {
+          source: 'waymark-hub',
+          type: EXTENSION_PROBE_REQUEST,
+          requestId,
+          url: params.url,
+          timeoutMs: params.timeoutMs,
+          panelType: params.panelType,
+          entrance: params.entrance,
+          username: params.username,
+          password: params.password,
+          version: params.version,
+          verifyAuth: params.verifyAuth,
+        },
+        window.location.origin
+      );
+    } catch {
+      finish({ bridged: false, reason: 'dispatch_error' });
+    }
+  });
+}
+
 function probeViaBridge(url: string, timeoutMs: number): Promise<BridgeProbeResponse | null> {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return Promise.resolve(null);
@@ -465,6 +629,7 @@ function probeViaBridge(url: string, timeoutMs: number): Promise<BridgeProbeResp
 
     const cleanup = () => {
       window.removeEventListener(BRIDGE_PROBE_RESULT_EVENT, onResult as EventListener);
+      window.removeEventListener('message', onMessage);
       if (timer) window.clearTimeout(timer);
     };
 
@@ -486,13 +651,32 @@ function probeViaBridge(url: string, timeoutMs: number): Promise<BridgeProbeResp
       }
     };
 
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.source !== window || !ev.data || typeof ev.data !== 'object') return;
+      if (ev.data.source === 'waymark-userscript' && ev.data.type === 'WAYMARK_USERSCRIPT_PROBE_RESULT') {
+        if (ev.data.requestId !== requestId) return;
+        finish({ bridged: true, result: ev.data as BridgeProbeResult });
+      }
+    };
+
     timer = window.setTimeout(
       () => finish({ bridged: false, reason: 'timeout' }),
       timeoutMs + 2000
     );
     window.addEventListener(BRIDGE_PROBE_RESULT_EVENT, onResult as EventListener);
+    window.addEventListener('message', onMessage);
 
     try {
+      window.postMessage(
+        {
+          source: 'waymark-hub',
+          type: 'WAYMARK_USERSCRIPT_PROBE_REQUEST',
+          requestId,
+          url,
+          timeoutMs,
+        },
+        window.location.origin
+      );
       window.dispatchEvent(
         new CustomEvent(BRIDGE_PROBE_REQUEST_EVENT, {
           detail: JSON.stringify({ requestId, url, timeoutMs }),

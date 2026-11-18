@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateUserscriptSource } from './src/utils/userscript.ts';
+import { getExtensionZipBuffer } from './src/utils/extension.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,6 +79,7 @@ const RESERVED_PUBLIC_PREFIXES = [
   '/node_modules',
   '/@vite',
   '/@react-refresh',
+  '/waymark-extension.zip',
   '/waymark-bridge.user.js',
   '/opsdeck-bridge.user.js',
   '/1panel-bridge.user.js',
@@ -823,6 +825,16 @@ async function startServer(): Promise<void> {
 
     writeServerWorkspaceState(nextState);
     res.json({ ok: true, updatedAt });
+  });
+
+  // Serve Chrome / Edge Manifest V3 extension archive
+  app.get('/waymark-extension.zip', (_req, res) => {
+    const zipBuffer = getExtensionZipBuffer();
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="waymark-extension.zip"');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Content-Length', String(zipBuffer.length));
+    res.send(zipBuffer);
   });
 
   // Serve Tampermonkey / Violentmonkey Userscript directly so browsers trigger 1-click install

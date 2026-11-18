@@ -2,11 +2,13 @@ import { useId, useMemo, useState } from 'react';
 import {
   Check,
   CheckCircle2,
+  ChevronDown,
   Copy,
   Download,
   KeyRound,
   Lock,
   LogOut,
+  Puzzle,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -20,6 +22,7 @@ import type { EncryptedVaultEnvelope, PanelNode, Workspace } from '../types/pane
 import { changeAdminPassword } from '../utils/auth';
 import { candidatesToPanelNodes, parseBatchInput } from '../utils/batchParser';
 import { decryptVaultBundle, encryptVaultNodes } from '../utils/crypto';
+import { EXTENSION_VERSION } from '../utils/extensionMeta';
 import { BRIDGE_VERSION, generateUserscriptSource } from '../utils/userscript';
 
 export type SettingsTab = 'bridge' | 'import' | 'security';
@@ -30,6 +33,8 @@ interface SettingsModalProps {
   nodes: PanelNode[];
   workspaces: Workspace[];
   activeWorkspace: Workspace;
+  extensionActive: boolean;
+  extensionVersion?: string | null;
   bridgeActive: boolean;
   bridgeVersion?: string | null;
   hasMasterLock: boolean;
@@ -56,6 +61,8 @@ export function SettingsModal({
   nodes,
   workspaces,
   activeWorkspace,
+  extensionActive,
+  extensionVersion,
   bridgeActive,
   bridgeVersion,
   hasMasterLock,
@@ -74,7 +81,9 @@ export function SettingsModal({
   const uid = useId();
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [copiedScript, setCopiedScript] = useState(false);
+  const [copiedExtUrl, setCopiedExtUrl] = useState(false);
   const [showScriptCode, setShowScriptCode] = useState(false);
+  const [showUserscriptFallback, setShowUserscriptFallback] = useState(false);
 
   // Batch import state
   const [rawText, setRawText] = useState('');
@@ -117,6 +126,12 @@ export function SettingsModal({
     onCopy('桥接脚本源码', scriptSource);
     setCopiedScript(true);
     window.setTimeout(() => setCopiedScript(false), 1500);
+  };
+
+  const handleCopyExtensionsUrl = () => {
+    onCopy('扩展管理页地址', 'chrome://extensions');
+    setCopiedExtUrl(true);
+    window.setTimeout(() => setCopiedExtUrl(false), 1500);
   };
 
   const handleConfirmImport = () => {
@@ -305,7 +320,7 @@ export function SettingsModal({
                 </h2>
                 {(
                   [
-                    ['bridge', '自动登录脚本'],
+                    ['bridge', '插件与脚本'],
                     ['import', '批量导入'],
                     ['security', '安全与备份'],
                   ] as Array<[SettingsTab, string]>
@@ -358,79 +373,193 @@ export function SettingsModal({
                   className="space-y-5"
                 >
                   {tab === 'bridge' && (
-                    <div className="space-y-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            {bridgeActive ? (
-                              <CheckCircle2 className="w-4 h-4 text-[#16A34A]" aria-hidden="true" />
-                            ) : (
-                              <ShieldAlert className="w-4 h-4 text-[#D97706]" aria-hidden="true" />
-                            )}
-                            <span className="text-sm font-medium text-[#09090B] dark:text-[#FAFAFA]">
-                              {bridgeActive
-                                ? `已检测到桥接脚本${bridgeVersion ? ` v${bridgeVersion}` : ''}，跳转时将自动填充并登录`
-                                : '安装一次 Tampermonkey 脚本，实现跨域名自动免密登录'}
-                            </span>
-                          </div>
-                          <p className="mt-1.5 text-xs text-[#71717A] dark:text-[#A1A1AA] leading-relaxed">
-                            点击卡片跳转时，凭据通过 URL Hash 与扩展一次性存储传递（页面加载后立即清理地址栏并销毁暂存）。脚本还会代为完成跨域连通性检测，兼容 1Panel、Grafana、Portainer、KubeSphere 等常见后台；Nginx HTTP Basic 认证请在站点编辑中选择「HTTP Basic 认证」。
-                            首次检测若弹出跨域授权提示，请选择「始终允许」。
-                          </p>
-                          {bridgeActive &&
-                            bridgeVersion &&
-                            bridgeVersion !== BRIDGE_VERSION && (
-                              <p className="mt-2 text-xs text-[#B45309] dark:text-[#FCD34D]">
-                                当前脚本版本 {bridgeVersion} 较旧，请点击下方「一键安装脚本」重新安装 v{BRIDGE_VERSION}，以启用跨域连通性检测与通用登录填充。
-                              </p>
-                            )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2.5">
-                        <a
-                          href="/waymark-bridge.user.js"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-lg transition-colors"
-                        >
-                          <Download className="w-3.5 h-3.5" aria-hidden="true" />
-                          <span>一键安装脚本 (.user.js)</span>
-                        </a>
-                        <button
-                          type="button"
-                          onClick={handleCopyScript}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium border border-[#E4E4E7] dark:border-[#27272A] hover:bg-[#F4F4F5] dark:hover:bg-[#1C1C1F] rounded-lg transition-colors"
-                        >
-                          {copiedScript ? (
-                            <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
+                    <div className="space-y-6">
+                      {/* Primary: Dedicated Browser Extension (MV3) */}
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-2.5">
+                          {extensionActive ? (
+                            <CheckCircle2 className="w-4 h-4 text-[#16A34A] mt-0.5 shrink-0" aria-hidden="true" />
                           ) : (
-                            <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                            <Puzzle className="w-4 h-4 text-[#09090B] dark:text-[#FAFAFA] mt-0.5 shrink-0" aria-hidden="true" />
                           )}
-                          <span>{copiedScript ? '已复制源码' : '复制脚本源码'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowScriptCode((v) => !v)}
-                          className="px-3 py-2 text-xs text-[#71717A] hover:text-[#09090B] dark:hover:text-white"
-                        >
-                          {showScriptCode ? '收起源码' : '查看源码'}
-                        </button>
+                          <div>
+                            <div className="text-sm font-medium text-[#09090B] dark:text-[#FAFAFA]">
+                              {extensionActive ? (
+                                <span>
+                                  已连接 Waymark 浏览器插件{' '}
+                                  <span className="font-mono tabular-nums text-xs text-[#71717A]">
+                                    v{extensionVersion}
+                                  </span>
+                                </span>
+                              ) : (
+                                'Waymark 浏览器插件（Chrome / Edge 推荐）'
+                              )}
+                            </div>
+                            <p className="mt-1.5 text-xs text-[#71717A] dark:text-[#A1A1AA] leading-relaxed">
+                              相比油猴脚本，浏览器插件由扩展后台直接探测 HTTP 与内网地址，彻底告别「受限」与授权弹窗；并通过原生页面主环境注入自动填充账号密码，兼容 1Panel、Grafana、Portainer、KubeSphere 等单页后台。
+                            </p>
+                            {extensionActive &&
+                              extensionVersion &&
+                              extensionVersion !== EXTENSION_VERSION && (
+                                <p className="mt-2 text-xs text-[#B45309] dark:text-[#FCD34D]">
+                                  检测到旧版插件 v{extensionVersion}，建议下载 v{EXTENSION_VERSION} 重新覆盖加载以获得最新探测与填充修复。
+                                </p>
+                              )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <a
+                            href="/waymark-extension.zip"
+                            download="waymark-extension.zip"
+                            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] dark:hover:bg-[#E4E4E7] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                          >
+                            <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>
+                              下载浏览器插件 (.zip · <span className="font-mono tabular-nums">v{EXTENSION_VERSION}</span>)
+                            </span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={handleCopyExtensionsUrl}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium border border-[#E4E4E7] dark:border-[#27272A] hover:bg-[#F4F4F5] dark:hover:bg-[#1C1C1F] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                          >
+                            {copiedExtUrl ? (
+                              <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                            )}
+                            <span>{copiedExtUrl ? '已复制 chrome://extensions' : '复制扩展页地址'}</span>
+                          </button>
+                        </div>
+
+                        <ol className="space-y-2 pt-1 text-xs text-[#52525B] dark:text-[#A1A1AA] leading-relaxed">
+                          <li className="flex items-baseline gap-2.5">
+                            <span className="font-mono tabular-nums text-[11px] font-semibold text-[#09090B] dark:text-[#FAFAFA] shrink-0">
+                              01.
+                            </span>
+                            <span>
+                              下载 <code className="font-mono text-[11px] text-[#09090B] dark:text-[#FAFAFA]">waymark-extension.zip</code> 并解压到本地文件夹（请保留该文件夹不要删除）。
+                            </span>
+                          </li>
+                          <li className="flex items-baseline gap-2.5">
+                            <span className="font-mono tabular-nums text-[11px] font-semibold text-[#09090B] dark:text-[#FAFAFA] shrink-0">
+                              02.
+                            </span>
+                            <span>
+                              在浏览器地址栏打开 <code className="font-mono text-[11px] text-[#09090B] dark:text-[#FAFAFA]">chrome://extensions</code>（Edge 为 <code className="font-mono text-[11px] text-[#09090B] dark:text-[#FAFAFA]">edge://extensions</code>），开启右上角「开发者模式」。
+                            </span>
+                          </li>
+                          <li className="flex items-baseline gap-2.5">
+                            <span className="font-mono tabular-nums text-[11px] font-semibold text-[#09090B] dark:text-[#FAFAFA] shrink-0">
+                              03.
+                            </span>
+                            <span>
+                              点击「加载已解压的扩展程序」，选中解压后的文件夹，然后刷新 Waymark 页面即可生效。
+                            </span>
+                          </li>
+                        </ol>
                       </div>
 
-                      <AnimatePresence>
-                        {showScriptCode && (
-                          <motion.pre
-                            initial={{ opacity: 0, y: -4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -4 }}
-                            transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                            className="p-4 bg-[#FAFAFA] dark:bg-[#09090B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg font-mono text-[11px] leading-relaxed text-[#52525B] dark:text-[#A1A1AA] overflow-x-auto max-h-60"
-                          >
-                            {scriptSource}
-                          </motion.pre>
-                        )}
-                      </AnimatePresence>
+                      {/* Secondary: Tampermonkey Userscript Fallback */}
+                      <div className="pt-5 border-t border-[#E4E4E7] dark:border-[#27272A] space-y-3">
+                        <button
+                          type="button"
+                          aria-expanded={showUserscriptFallback}
+                          onClick={() => setShowUserscriptFallback((v) => !v)}
+                          className="w-full flex items-center justify-between gap-3 text-left group"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            {bridgeActive && !extensionActive ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A] shrink-0" aria-hidden="true" />
+                            ) : (
+                              <ShieldAlert className="w-3.5 h-3.5 text-[#71717A] shrink-0" aria-hidden="true" />
+                            )}
+                            <span className="text-xs font-medium text-[#27272A] dark:text-[#E4E4E7] group-hover:text-[#09090B] dark:group-hover:text-white truncate">
+                              Tampermonkey 油猴脚本（备选方案 · <span className="font-mono tabular-nums">v{BRIDGE_VERSION}</span>）
+                            </span>
+                            {bridgeActive && (
+                              <span className="text-[11px] text-[#71717A] whitespace-nowrap shrink-0">
+                                · 当前检测到 <span className="font-mono tabular-nums">v{bridgeVersion}</span>
+                              </span>
+                            )}
+                          </div>
+                          <ChevronDown
+                            className={`w-4 h-4 text-[#71717A] transition-transform duration-150 shrink-0 ${
+                              showUserscriptFallback ? 'rotate-180' : ''
+                            }`}
+                            aria-hidden="true"
+                          />
+                        </button>
+
+                        <AnimatePresence initial={false}>
+                          {showUserscriptFallback && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                              className="overflow-hidden space-y-3"
+                            >
+                              <p className="text-xs text-[#71717A] dark:text-[#A1A1AA] leading-relaxed">
+                                若不便安装扩展，也可使用 Tampermonkey / Violentmonkey 脚本。注意：新版 Chrome 需在扩展详情页启用「允许运行用户脚本」，且若同时装有插件与脚本，建议停用旧版油猴脚本以避免冲突。
+                              </p>
+                              {bridgeActive &&
+                                bridgeVersion &&
+                                bridgeVersion !== BRIDGE_VERSION && (
+                                  <p className="text-xs text-[#B45309] dark:text-[#FCD34D]">
+                                    当前油猴脚本版本 {bridgeVersion} 较旧，请重新安装 v{BRIDGE_VERSION}。
+                                  </p>
+                                )}
+
+                              <div className="flex flex-wrap items-center gap-2.5">
+                                <a
+                                  href="/waymark-bridge.user.js"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium border border-[#E4E4E7] dark:border-[#27272A] hover:bg-[#F4F4F5] dark:hover:bg-[#1C1C1F] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                                >
+                                  <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                                  <span>安装油猴脚本 (.user.js)</span>
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={handleCopyScript}
+                                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium border border-[#E4E4E7] dark:border-[#27272A] hover:bg-[#F4F4F5] dark:hover:bg-[#1C1C1F] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                                >
+                                  {copiedScript ? (
+                                    <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                                  )}
+                                  <span>{copiedScript ? '已复制源码' : '复制脚本源码'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowScriptCode((v) => !v)}
+                                  className="px-3 py-1.5 text-xs text-[#71717A] hover:text-[#09090B] dark:hover:text-white whitespace-nowrap shrink-0"
+                                >
+                                  {showScriptCode ? '收起源码' : '查看源码'}
+                                </button>
+                              </div>
+
+                              <AnimatePresence>
+                                {showScriptCode && (
+                                  <motion.pre
+                                    initial={{ opacity: 0, y: -4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -4 }}
+                                    transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                                    className="p-4 bg-[#FAFAFA] dark:bg-[#09090B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg font-mono text-[11px] leading-relaxed text-[#52525B] dark:text-[#A1A1AA] overflow-x-auto max-h-60"
+                                  >
+                                    {scriptSource}
+                                  </motion.pre>
+                                )}
+                              </AnimatePresence>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </div>
                   )}
 

@@ -43,6 +43,11 @@ import {
   normalizeEntrance,
 } from './utils/userscript';
 import {
+  EXTENSION_LAUNCH_PAYLOAD,
+  EXTENSION_READY_EVENT,
+  EXTENSION_VERSION,
+} from './utils/extensionMeta';
+import {
   createDefaultWorkspace,
   DEFAULT_WORKSPACE_GROUPS,
   DEFAULT_WORKSPACE_ID,
@@ -150,6 +155,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('bridge');
   const [commandOpen, setCommandOpen] = useState(false);
+  const [extensionActive, setExtensionActive] = useState(false);
+  const [extensionVersion, setExtensionVersion] = useState<string | null>(null);
   const [bridgeActive, setBridgeActive] = useState(false);
   const [bridgeVersion, setBridgeVersion] = useState<string | null>(null);
   const [batchProbing, setBatchProbing] = useState(false);
@@ -264,23 +271,36 @@ export default function App() {
     };
   }, [publicMode]);
 
-  // Detect Userscript bridge
+  // Detect Browser Extension and Userscript bridge
   useEffect(() => {
     if (publicMode !== 'admin') return;
     const checkBridge = () => {
-      const version = document.documentElement.getAttribute('data-paneldeck-bridge');
-      setBridgeVersion(version);
-      setBridgeActive(Boolean(version));
+      const extVer = document.documentElement.getAttribute('data-waymark-extension');
+      const userVer = document.documentElement.getAttribute('data-paneldeck-bridge');
+      setExtensionVersion(extVer);
+      setExtensionActive(Boolean(extVer));
+      setBridgeVersion(userVer);
+      setBridgeActive(Boolean(userVer));
+    };
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.source !== window || !ev.data || typeof ev.data !== 'object') return;
+      if (ev.data.source === 'waymark-extension' && ev.data.type === 'WAYMARK_EXT_READY') {
+        checkBridge();
+      }
     };
     checkBridge();
     window.addEventListener('paneldeck-bridge-ready', checkBridge);
+    window.addEventListener(EXTENSION_READY_EVENT, checkBridge);
+    window.addEventListener('message', onMessage);
     const attrObserver = new MutationObserver(checkBridge);
     attrObserver.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['data-paneldeck-bridge'],
+      attributeFilter: ['data-waymark-extension', 'data-paneldeck-bridge'],
     });
     return () => {
       window.removeEventListener('paneldeck-bridge-ready', checkBridge);
+      window.removeEventListener(EXTENSION_READY_EVENT, checkBridge);
+      window.removeEventListener('message', onMessage);
       attrObserver.disconnect();
     };
   }, [publicMode]);
@@ -1014,6 +1034,10 @@ export default function App() {
     );
     try {
       window.postMessage({ type: 'waymark-hub-launch', payload }, window.location.origin);
+      window.postMessage(
+        { source: 'waymark-hub', type: EXTENSION_LAUNCH_PAYLOAD, payload },
+        window.location.origin
+      );
     } catch {
       // Ignore postMessage errors
     }
@@ -1023,10 +1047,10 @@ export default function App() {
       prev.map((item) => (item.id === node.id ? { ...item, lastAccessedAt: now } : item))
     );
 
-    if (bridgeActive) {
+    if (extensionActive || bridgeActive) {
       notify(`正在登录 ${node.name}`);
     } else {
-      notify(`正在打开 ${node.name}（在右上角设置安装脚本可自动填充）`);
+      notify(`正在打开 ${node.name}（在右上角设置安装浏览器插件可自动填充）`);
     }
   };
 
@@ -1209,10 +1233,19 @@ export default function App() {
         searchInputRef={searchInputRef}
         theme={theme}
         onToggleTheme={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
-        onOpenSettings={() => openSettings(bridgeActive ? 'import' : 'bridge')}
+        onOpenSettings={() => openSettings(extensionActive || bridgeActive ? 'import' : 'bridge')}
         onOpenBridge={() => openSettings('bridge')}
-        bridgeStatus={bridgeActive && bridgeVersion !== BRIDGE_VERSION ? 'stale' : undefined}
-        bridgeVersion={bridgeVersion}
+        bridgeStatus={
+          extensionActive
+            ? extensionVersion !== EXTENSION_VERSION
+              ? 'stale'
+              : undefined
+            : bridgeActive && bridgeVersion !== BRIDGE_VERSION
+              ? 'stale'
+              : undefined
+        }
+        bridgeVersion={extensionActive ? extensionVersion : bridgeVersion}
+        bridgeMode={extensionActive ? 'extension' : 'userscript'}
         onAddNew={() => {
           setEditingNode(null);
           setDrawerOpen(true);
@@ -1248,7 +1281,7 @@ export default function App() {
           /* Guided First-Panel Onboarding per workspace (no sample/preview data) */
           <FirstPanelOnboarding
             workspace={activeWorkspace}
-            bridgeActive={bridgeActive}
+            bridgeActive={extensionActive || bridgeActive}
             existingGroups={allKnownGroups}
             onSaveFirstNode={(data) => handleSaveNode(data)}
             onOpenImport={() => openSettings('import')}
@@ -1515,6 +1548,8 @@ export default function App() {
         nodes={nodes}
         workspaces={workspaces}
         activeWorkspace={activeWorkspace}
+        extensionActive={extensionActive}
+        extensionVersion={extensionVersion}
         bridgeActive={bridgeActive}
         bridgeVersion={bridgeVersion}
         hasMasterLock={Boolean(masterPassphrase)}

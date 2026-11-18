@@ -11,6 +11,7 @@ interface TopBarProps {
   onOpenBridge?: () => void;
   bridgeStatus?: 'ok' | 'stale';
   bridgeVersion?: string | null;
+  bridgeMode?: 'extension' | 'userscript';
   onAddNew: () => void;
   adminUsername?: string;
   onLogout: () => void;
@@ -26,6 +27,7 @@ export function TopBar({
   onOpenBridge,
   bridgeStatus,
   bridgeVersion,
+  bridgeMode = 'userscript',
   onAddNew,
   adminUsername,
   onLogout,
@@ -68,11 +70,11 @@ export function TopBar({
             <button
               type="button"
               onClick={onOpenBridge}
-              title={`检测到脚本 v${bridgeVersion || '未知'}，请刷新页面或重新安装最新版脚本`}
-              className="h-8 inline-flex items-center gap-1 px-2 text-[11px] font-medium text-[#B45309] dark:text-[#FCD34D] bg-[#FFFBEB] dark:bg-[#271C0B] border border-[#FDE68A] dark:border-[#78350F] rounded-lg hover:bg-[#FEF3C7] dark:hover:bg-[#2D210E] transition-colors"
+              title={`检测到${bridgeMode === 'extension' ? '插件' : '脚本'} v${bridgeVersion || '未知'}，请更新至最新版本`}
+              className="h-8 inline-flex items-center gap-1 px-2 text-[11px] font-medium text-[#B45309] dark:text-[#FCD34D] bg-[#FFFBEB] dark:bg-[#271C0B] border border-[#FDE68A] dark:border-[#78350F] rounded-lg hover:bg-[#FEF3C7] dark:hover:bg-[#2D210E] transition-colors whitespace-nowrap shrink-0"
             >
               <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">脚本需刷新</span>
+              <span className="hidden sm:inline">{bridgeMode === 'extension' ? '插件需更新' : '脚本需刷新'}</span>
             </button>
           )}
 
@@ -80,8 +82,8 @@ export function TopBar({
             type="button"
             whileTap={{ scale: 0.94 }}
             onClick={onOpenSettings}
-            aria-label="脚本、导入与安全设置"
-            title="自动登录脚本 · 批量导入 · 备份"
+            aria-label="插件、导入与安全设置"
+            title="浏览器插件 · 批量导入 · 备份"
             className="h-8 w-8 inline-flex items-center justify-center text-[#52525B] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#18181B] rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
           >
             <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />

@@ -568,7 +568,7 @@ export function PanelDrawer({
                         <p className="mt-1 text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
                           {authMode === 'basic'
                             ? '点击卡片时，Waymark 会把用户名密码写入启动链接，由浏览器完成 HTTP Basic 原生认证；书签脚本无法填充浏览器原生认证弹窗。'
-                            : '脚本会在登录页查找用户名与密码输入框并填充；若页面仍有未勾选的协议，脚本只填充、不自动提交。'}
+                            : '已安装 Waymark 浏览器插件或脚本时，打开登录页会自动填充账号密码；若页面仍有未勾选的协议，插件只填充、不自动提交。'}
                         </p>
                       </div>
 

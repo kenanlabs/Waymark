@@ -1,6 +1,6 @@
 import type { BridgeLaunchPayload, PanelNode, PanelType } from '../types/panel';
 
-export const BRIDGE_VERSION = '1.5.1';
+export const BRIDGE_VERSION = '1.6.0';
 export const BRIDGE_PROBE_REQUEST_EVENT = 'waymark-probe-request';
 export const BRIDGE_PROBE_RESULT_EVENT = 'waymark-probe-result';
 
@@ -115,11 +115,11 @@ export function buildBridgeLaunchUrl(node: PanelNode, panelType?: PanelType): st
 }
 
 /**
- * Shared fill runtime used by both the bookmarklet and the userscript.
- * It is intentionally written without comments so it can be compacted into a
+ * Shared fill runtime used by the browser extension, bookmarklet, and userscript.
+ * Intentionally written without comments so it can be compacted into a
  * javascript: URL without breaking.
  */
-function buildAutoFillCoreSource(): string {
+export function buildAutoFillCoreSource(): string {
   return String.raw`
 function __wmToast(message, isError) {
   try {
@@ -132,7 +132,7 @@ function __wmToast(message, isError) {
     (document.body || document.documentElement).appendChild(box);
     setTimeout(function () {
       try { if (box.parentNode) box.parentNode.removeChild(box); } catch (_) {}
-    }, isError ? 8000 : 3200);
+    }, isError ? 8000 : 3500);
   } catch (_) {}
 }
 
@@ -179,9 +179,17 @@ function __wmDescribe(el) {
   if (!el) return '';
   try {
     var cls = typeof el.className === 'string' ? el.className : '';
-    return String((el.innerText || el.textContent || '')).slice(0, 400) + ' ' +
-      (el.getAttribute ? (el.getAttribute('aria-label') || '') : '') + ' ' +
-      (el.name || '') + ' ' + (el.id || '') + ' ' + cls;
+    var placeholder = el.getAttribute ? (el.getAttribute('placeholder') || '') : '';
+    var aria = el.getAttribute ? (el.getAttribute('aria-label') || '') : '';
+    var titleAttr = el.getAttribute ? (el.getAttribute('title') || '') : '';
+    var extraLabel = '';
+    if (el.tagName === 'INPUT' && el.closest) {
+      var formItem = el.closest('.el-form-item,.ant-form-item,.n-form-item,label,.form-group,.field');
+      if (formItem) extraLabel = String(formItem.innerText || formItem.textContent || '').slice(0, 120);
+    }
+    return String((el.innerText || el.textContent || '')).slice(0, 300) + ' ' +
+      placeholder + ' ' + aria + ' ' + titleAttr + ' ' +
+      (el.name || '') + ' ' + (el.id || '') + ' ' + cls + ' ' + extraLabel;
   } catch (_) {
     return '';
   }
@@ -191,10 +199,14 @@ function __wmSetValue(el, value) {
   if (!el) return;
   try { el.removeAttribute('readonly'); el.readOnly = false; } catch (_) {}
   try { el.focus({ preventScroll: true }); } catch (_) {}
+  var W = __wmView(el);
+  try {
+    el.dispatchEvent(new W.Event('compositionstart', { bubbles: true }));
+  } catch (_) {}
   try {
     var proto = Object.getPrototypeOf(el);
     var desc = (proto && Object.getOwnPropertyDescriptor(proto, 'value')) ||
-      Object.getOwnPropertyDescriptor(__wmView(el).HTMLInputElement.prototype, 'value');
+      Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, 'value');
     if (desc && desc.set) desc.set.call(el, value);
     else el.value = value;
   } catch (_) {
@@ -204,15 +216,16 @@ function __wmSetValue(el, value) {
     var tracker = el._valueTracker;
     if (tracker && typeof tracker.setValue === 'function') tracker.setValue('');
   } catch (_) {}
-  var W = __wmView(el);
   try {
     el.dispatchEvent(new W.InputEvent('input', { bubbles: true, cancelable: true, data: String(value), inputType: 'insertText' }));
   } catch (_) {
     try { el.dispatchEvent(new W.Event('input', { bubbles: true })); } catch (__) {}
   }
   try {
+    el.dispatchEvent(new W.Event('compositionend', { bubbles: true }));
+  } catch (_) {}
+  try {
     el.dispatchEvent(new W.Event('change', { bubbles: true }));
-    el.dispatchEvent(new W.Event('blur', { bubbles: true }));
   } catch (_) {}
 }
 
@@ -273,7 +286,7 @@ function __wmHasUncheckedAgreement(scope) {
 }
 
 function __wmFindPassword() {
-  var direct = document.querySelectorAll('input[type="password"]');
+  var direct = __wmAll(document, 'input[type="password"]');
   for (var d = 0; d < direct.length; d++) {
     if (__wmVisible(direct[d]) && !direct[d].disabled) return direct[d];
   }
@@ -302,56 +315,75 @@ function __wmLooksLikePassword(input) {
   return !/user|account|login|email|name|phone|账号|用户|邮箱|手机|登录名/i.test(clue);
 }
 
+function __wmIsTextInputCandidate(input, passInput) {
+  if (!input || input === passInput || !__wmVisible(input) || input.disabled) return false;
+  var t = String(input.type || 'text').toLowerCase();
+  if (/^(hidden|checkbox|radio|submit|button|reset|file|image|password|search)$/i.test(t)) return false;
+  return true;
+}
+
 function __wmFindScope(passInput) {
   var form = passInput.closest ? passInput.closest('form') : null;
-  if (form) return form;
+  if (form) {
+    var formInputs = __wmAll(form, 'input');
+    for (var f = 0; f < formInputs.length; f++) {
+      if (__wmIsTextInputCandidate(formInputs[f], passInput)) return form;
+    }
+  }
   var cur = passInput.parentElement;
   var depth = 0;
-  while (cur && cur !== document.body && depth < 6) {
+  while (cur && cur !== document.body && depth < 8) {
     var inputs = __wmAll(cur, 'input');
     var hasText = false;
     for (var i = 0; i < inputs.length; i++) {
-      var input = inputs[i];
-      if (input !== passInput && __wmVisible(input) && !input.disabled &&
-        !/^(hidden|checkbox|radio|submit|button|reset|file|image|password)$/i.test(input.type || '')) {
+      if (__wmIsTextInputCandidate(inputs[i], passInput)) {
         hasText = true;
         break;
       }
     }
-    var buttons = __wmAll(cur, 'button,input[type="submit"],[role="button"]');
-    var hasButton = false;
-    for (var j = 0; j < buttons.length; j++) {
-      if (__wmVisible(buttons[j])) { hasButton = true; break; }
-    }
-    if (hasText || hasButton) return cur;
+    if (hasText) return cur;
     cur = cur.parentElement;
     depth++;
   }
-  return document;
+  return form || document;
 }
 
 function __wmFindUsername(passInput, scope) {
   var all = __wmAll(scope, 'input');
   var candidates = [];
   for (var i = 0; i < all.length; i++) {
-    var input = all[i];
-    if (input === passInput || !__wmVisible(input) || input.disabled) continue;
-    if (/^(hidden|checkbox|radio|submit|button|reset|file|image|password)$/i.test(input.type || '')) continue;
-    candidates.push(input);
+    if (__wmIsTextInputCandidate(all[i], passInput)) {
+      candidates.push(all[i]);
+    }
   }
+  if (!candidates.length && scope !== document) {
+    all = __wmAll(document, 'input');
+    for (var d = 0; d < all.length; d++) {
+      if (__wmIsTextInputCandidate(all[d], passInput)) {
+        candidates.push(all[d]);
+      }
+    }
+  }
+  var filtered = [];
+  for (var c = 0; c < candidates.length; c++) {
+    if (!/captcha|verify|otp|mfa|totp|验证码|校验码|动态码/i.test(__wmDescribe(candidates[c]))) {
+      filtered.push(candidates[c]);
+    }
+  }
+  var pool = filtered.length ? filtered : candidates;
   var passIndex = all.indexOf(passInput);
-  for (var j = 0; j < candidates.length; j++) {
-    var candidate = candidates[j];
+  for (var j = 0; j < pool.length; j++) {
+    var candidate = pool[j];
     if (/username|email/i.test(candidate.autocomplete || '') ||
-      /user|account|login|email|name|phone|账号|用户|邮箱|手机|登录名/i.test(__wmDescribe(candidate))) {
+      /user|account|login|email|name|phone|账号|账户|用户|邮箱|手机|登录名/i.test(__wmDescribe(candidate))) {
       return candidate;
     }
   }
   var before = [];
-  for (var k = 0; k < candidates.length; k++) {
-    if (passIndex < 0 || all.indexOf(candidates[k]) < passIndex) before.push(candidates[k]);
+  for (var k = 0; k < pool.length; k++) {
+    if (passIndex < 0 || all.indexOf(pool[k]) < passIndex) before.push(pool[k]);
   }
-  return before[before.length - 1] || candidates[0] || null;
+  return before[before.length - 1] || pool[0] || null;
 }
 
 function __wmFindSubmit(scope, passInput) {
@@ -387,12 +419,13 @@ function __wmHasCaptcha(scope, passInput, userInput) {
     var input = inputs[i];
     if (input === passInput || input === userInput) continue;
     if (!__wmVisible(input)) continue;
-    if (/captcha|verify|otp|mfa|验证码|校验码/i.test(__wmDescribe(input))) return true;
+    if (/captcha|verify|otp|mfa|totp|验证码|校验码|动态码/i.test(__wmDescribe(input))) return true;
   }
   var images = __wmAll(scope, 'img');
   for (var j = 0; j < images.length; j++) {
     var src = String(images[j].getAttribute('src') || '');
-    if (/captcha|verify|验证码/i.test(src) && __wmVisible(images[j])) return true;
+    var alt = String(images[j].getAttribute('alt') || '');
+    if ((/captcha|verify|验证码/i.test(src) || /captcha|verify|验证码/i.test(alt)) && __wmVisible(images[j])) return true;
   }
   return false;
 }
@@ -413,23 +446,110 @@ function __wmClickPasswordTab() {
 }
 
 function __wmStartAutoFill(options) {
+  if (window.__waymarkFillActive) return;
+  window.__waymarkFillActive = true;
   var username = String((options && options.username) || '');
   var password = String((options && options.password) || '');
   var autoSubmit = !options || options.autoSubmit !== false;
-  var done = false;
+  var filledOnce = false;
   var submitted = false;
+  var userTouched = false;
   var tries = 0;
   var tabClicked = false;
+  var watchStartedAt = 0;
+  var observer = null;
+
+  function markTouched(ev) {
+    if (ev && ev.isTrusted) userTouched = true;
+  }
+
+  function bindTouchGuard(el) {
+    if (!el || el.__wmGuardBound) return;
+    el.__wmGuardBound = true;
+    el.addEventListener('keydown', markTouched, true);
+    el.addEventListener('pointerdown', markTouched, true);
+  }
+
+  function cleanupWatcher() {
+    window.__waymarkFillActive = false;
+    if (observer) {
+      try { observer.disconnect(); } catch (_) {}
+      observer = null;
+    }
+  }
+
+  function applyFill() {
+    var passInput = __wmFindPassword();
+    if (!passInput) return null;
+    var scope = __wmFindScope(passInput);
+    var userInput = __wmFindUsername(passInput, scope);
+    bindTouchGuard(userInput);
+    bindTouchGuard(passInput);
+    if (!userTouched) {
+      if (userInput && username && userInput.value !== username) __wmSetValue(userInput, username);
+      if (password && passInput.value !== password) __wmSetValue(passInput, password);
+    }
+    return { passInput: passInput, userInput: userInput, scope: scope };
+  }
+
+  function trySubmit(ctx) {
+    if (!autoSubmit || submitted || userTouched || !ctx) return;
+    if (__wmHasCaptcha(document, ctx.passInput, ctx.userInput)) {
+      submitted = true;
+      __wmToast('Waymark：已填充账号密码，检测到验证码，请手动完成登录', true);
+      return;
+    }
+    if (__wmHasUncheckedAgreement(ctx.scope)) {
+      submitted = true;
+      __wmToast('Waymark：已填充账号密码；请勾选登录协议后点击登录', true);
+      return;
+    }
+    submitted = true;
+    var submitButton = __wmFindSubmit(ctx.scope, ctx.passInput);
+    if (submitButton && !submitButton.disabled) {
+      try { submitButton.click(); } catch (_) {}
+      return;
+    }
+    try {
+      ctx.passInput.focus();
+      var W = __wmView(ctx.passInput);
+      ['keydown', 'keypress', 'keyup'].forEach(function (type) {
+        ctx.passInput.dispatchEvent(new W.KeyboardEvent(type, {
+          key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
+        }));
+      });
+      var form = ctx.passInput.closest && ctx.passInput.closest('form');
+      if (form && typeof form.requestSubmit === 'function') {
+        try { form.requestSubmit(); } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  function stabilize() {
+    if (userTouched || Date.now() - watchStartedAt > 3500) {
+      cleanupWatcher();
+      return;
+    }
+    var ctx = applyFill();
+    if (ctx && !submitted && Date.now() - watchStartedAt >= 450) {
+      var userOk = !username || !ctx.userInput || ctx.userInput.value === username;
+      var passOk = !password || ctx.passInput.value === password;
+      if (userOk && passOk) {
+        trySubmit(ctx);
+      }
+    }
+    setTimeout(stabilize, 220);
+  }
 
   function attempt() {
-    if (done) return;
     tries++;
     if (tries > 100) {
+      cleanupWatcher();
       __wmToast('Waymark：未找到登录表单，可能仍在加载或需要切换密码登录', true);
       return;
     }
-    var passInput = __wmFindPassword();
-    if (!passInput) {
+    var ctx = applyFill();
+    if (!ctx) {
       if (!tabClicked && tries >= 5) {
         tabClicked = true;
         __wmClickPasswordTab();
@@ -438,52 +558,21 @@ function __wmStartAutoFill(options) {
       return;
     }
 
-    done = true;
-    var scope = __wmFindScope(passInput);
-    var userInput = __wmFindUsername(passInput, scope);
-
-    if (userInput && username) __wmSetValue(userInput, username);
-    if (password) __wmSetValue(passInput, password);
-    __wmToast('Waymark：已填充' + (autoSubmit ? '，正在登录…' : ''), false);
-
-    setTimeout(function () {
-      if (userInput && username && userInput.value !== username) __wmSetValue(userInput, username);
-      if (password && passInput.value !== password) __wmSetValue(passInput, password);
-      if (!autoSubmit) return;
-
-      if (__wmHasCaptcha(document, passInput, userInput)) {
-        __wmToast('Waymark：检测到验证码，请手动完成登录', true);
-        return;
-      }
-
-      if (__wmHasUncheckedAgreement(scope)) {
-        __wmToast('Waymark：已填充账号密码；登录页仍有未勾选的协议，请手动勾选后登录', true);
-        return;
-      }
-
-      setTimeout(function () {
-        if (submitted) return;
-        submitted = true;
-        var submitButton = __wmFindSubmit(scope, passInput);
-        if (submitButton && !submitButton.disabled) {
-          try { submitButton.click(); } catch (_) {}
-          return;
-        }
-        try {
-          passInput.focus();
-          var W = __wmView(passInput);
-          ['keydown', 'keypress', 'keyup'].forEach(function (type) {
-            passInput.dispatchEvent(new W.KeyboardEvent(type, {
-              key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
-            }));
-          });
-          var form = passInput.closest && passInput.closest('form');
-          if (form && typeof form.requestSubmit === 'function') {
-            try { form.requestSubmit(); } catch (_) {}
-          }
-        } catch (_) {}
-      }, 160);
-    }, 200);
+    if (!filledOnce) {
+      filledOnce = true;
+      watchStartedAt = Date.now();
+      try {
+        window.postMessage({ source: 'waymark-autofill', type: 'WAYMARK_AUTOFILL_FILLED' }, '*');
+      } catch (_) {}
+      __wmToast('Waymark：已填充' + (autoSubmit ? '，准备登录…' : ''), false);
+      try {
+        observer = new MutationObserver(function () {
+          if (!userTouched) applyFill();
+        });
+        if (document.body) observer.observe(document.body, { childList: true, subtree: true });
+      } catch (_) {}
+      setTimeout(stabilize, 200);
+    }
   }
 
   if (document.readyState === 'loading') {
@@ -567,26 +656,32 @@ ${core}
   function markHubReady() {
     if (!isHubDocument()) return false;
     document.documentElement.setAttribute('data-paneldeck-bridge', BRIDGE_VERSION);
-    window.dispatchEvent(new CustomEvent('paneldeck-bridge-ready'));
+    try {
+      window.dispatchEvent(new CustomEvent('paneldeck-bridge-ready'));
+    } catch (_) {}
+    try {
+      window.postMessage({ source: 'waymark-userscript', type: 'WAYMARK_BRIDGE_READY', version: BRIDGE_VERSION }, '*');
+    } catch (_) {}
     return true;
   }
 
-  if (document.readyState !== 'loading') {
-    markHubReady();
-  } else {
-    window.addEventListener('DOMContentLoaded', markHubReady, { once: true });
+  if (!markHubReady()) {
+    try {
+      const headObserver = new MutationObserver(() => {
+        if (markHubReady()) headObserver.disconnect();
+      });
+      headObserver.observe(document.documentElement, { childList: true, subtree: true });
+      window.addEventListener('DOMContentLoaded', () => {
+        markHubReady();
+        headObserver.disconnect();
+      }, { once: true });
+    } catch (_) {
+      window.addEventListener('DOMContentLoaded', markHubReady, { once: true });
+    }
   }
 
-  // Privileged client-side reachability probe (bypasses CORS, mixed content and PNA).
-  window.addEventListener(PROBE_REQUEST_EVENT, (ev) => {
-    if (!isHubDocument() || !ev || !ev.detail) return;
-    let request;
-    try {
-      request = typeof ev.detail === 'string' ? JSON.parse(ev.detail) : ev.detail;
-    } catch (_) {
-      return;
-    }
-    if (!request || !request.requestId || !request.url) return;
+  function runProbeRequest(request) {
+    if (!isHubDocument() || !request || !request.requestId || !request.url) return;
 
     let parsed;
     try {
@@ -597,10 +692,14 @@ ${core}
     }
 
     const finish = (result) => {
+      const payload = { requestId: request.requestId, ...result };
       try {
         window.dispatchEvent(new CustomEvent(PROBE_RESULT_EVENT, {
-          detail: JSON.stringify({ requestId: request.requestId, ...result }),
+          detail: JSON.stringify(payload),
         }));
+      } catch (_) {}
+      try {
+        window.postMessage({ source: 'waymark-userscript', type: 'WAYMARK_USERSCRIPT_PROBE_RESULT', ...payload }, '*');
       } catch (_) {}
     };
 
@@ -655,6 +754,20 @@ ${core}
     } catch (err) {
       finishOnce({ ok: false, error: 'exception', message: String(err) });
     }
+  }
+
+  // Listen via both CustomEvent and window.postMessage to bypass Tampermonkey MV3 sandbox isolation.
+  window.addEventListener(PROBE_REQUEST_EVENT, (ev) => {
+    if (!ev || !ev.detail) return;
+    try {
+      runProbeRequest(typeof ev.detail === 'string' ? JSON.parse(ev.detail) : ev.detail);
+    } catch (_) {}
+  });
+  document.addEventListener(PROBE_REQUEST_EVENT, (ev) => {
+    if (!ev || !ev.detail) return;
+    try {
+      runProbeRequest(typeof ev.detail === 'string' ? JSON.parse(ev.detail) : ev.detail);
+    } catch (_) {}
   });
 
   // Capture launch payloads from the Waymark page.
@@ -667,11 +780,15 @@ ${core}
   });
 
   window.addEventListener('message', (ev) => {
-    if (ev.source !== window || !ev.data || ev.data.type !== 'waymark-hub-launch') return;
-    try {
-      const parsed = typeof ev.data.payload === 'string' ? JSON.parse(ev.data.payload) : ev.data.payload;
-      storePendingPayload(parsed);
-    } catch (_) {}
+    if (ev.source !== window || !ev.data) return;
+    if (ev.data.type === 'waymark-hub-launch' || ev.data.type === 'WAYMARK_LAUNCH_PAYLOAD') {
+      try {
+        const parsed = typeof ev.data.payload === 'string' ? JSON.parse(ev.data.payload) : ev.data.payload;
+        storePendingPayload(parsed);
+      } catch (_) {}
+    } else if (ev.data.type === 'WAYMARK_USERSCRIPT_PROBE_REQUEST') {
+      runProbeRequest(ev.data);
+    }
   });
 
   // Capture the hash payload before the target SPA rewrites the URL.
@@ -699,8 +816,10 @@ ${core}
       if (a.hostname !== b.hostname) return false;
       const aDefaultPort = a.port || (a.protocol === 'https:' ? '443' : '80');
       const bDefaultPort = b.port || (b.protocol === 'https:' ? '443' : '80');
-      if (a.protocol === 'http:' && b.protocol === 'https:' && aDefaultPort === '80' && bDefaultPort === '443') {
-        return true;
+      if (a.protocol === 'http:' && b.protocol === 'https:') {
+        if ((aDefaultPort === '80' && bDefaultPort === '443') || aDefaultPort === bDefaultPort) {
+          return true;
+        }
       }
       return a.protocol === b.protocol && aDefaultPort === bDefaultPort;
     } catch (_) {

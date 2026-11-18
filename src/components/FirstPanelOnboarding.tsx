@@ -431,7 +431,7 @@ export function FirstPanelOnboarding({
           onClick={onOpenBridge}
           className="hover:text-[#09090B] dark:hover:text-white transition-colors"
         >
-          {bridgeActive ? '自动登录脚本已就绪' : '安装 Tampermonkey 自动登录脚本'}
+          {bridgeActive ? '自动登录插件/脚本已就绪' : '安装浏览器插件（支持自动登录与无限制检测）'}
         </button>
       </div>
     </motion.div>
