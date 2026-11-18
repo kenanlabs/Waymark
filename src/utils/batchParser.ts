@@ -1,4 +1,5 @@
 import type { PanelNode, PanelVersion } from '../types/panel';
+import { generateId } from './crypto';
 import { normalizeBaseUrl, normalizeEntrance, splitFullPanelUrl } from './userscript';
 
 export interface ParsedBatchCandidate {
@@ -150,7 +151,7 @@ export function candidatesToPanelNodes(
   return candidates
     .filter((c) => c.valid)
     .map((c) => ({
-      id: crypto.randomUUID(),
+      id: generateId(),
       workspaceId,
       name: c.name,
       baseUrl: c.baseUrl,

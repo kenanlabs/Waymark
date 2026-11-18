@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { ArrowUpRight, Check, Copy, Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { Workspace } from '../types/panel';
+import { copyTextToClipboard } from '../utils/crypto';
 import {
   normalizePublicDomain,
   normalizePublicRoute,
@@ -94,12 +95,10 @@ export function WorkspaceModal({
 
   const handleCopyPublicUrl = async () => {
     if (!fullPublicUrl) return;
-    try {
-      await navigator.clipboard.writeText(fullPublicUrl);
+    const ok = await copyTextToClipboard(fullPublicUrl);
+    if (ok) {
       setCopiedUrl(true);
       window.setTimeout(() => setCopiedUrl(false), 1500);
-    } catch {
-      // ignore clipboard errors
     }
   };
 

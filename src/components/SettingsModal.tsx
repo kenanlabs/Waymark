@@ -160,9 +160,13 @@ export function SettingsModal({
       return;
     }
     setLockError('');
-    await onEnableMasterLock(pass1);
-    setPass1('');
-    setPass2('');
+    try {
+      await onEnableMasterLock(pass1);
+      setPass1('');
+      setPass2('');
+    } catch (err) {
+      setLockError(err instanceof Error ? err.message : '启用主密码加密失败');
+    }
   };
 
   const triggerDownload = (filename: string, content: string, mime: string) => {
@@ -182,14 +186,18 @@ export function SettingsModal({
       onNotify('请先设置至少 4 位加密口令');
       return;
     }
-    const envelope = await encryptVaultNodes(nodes, exportPass, workspaces);
-    triggerDownload(
-      `waymark-backup-${new Date().toISOString().slice(0, 10)}.vault.json`,
-      JSON.stringify(envelope, null, 2),
-      'application/json'
-    );
-    setExportPass('');
-    onNotify('已导出加密备份文件');
+    try {
+      const envelope = await encryptVaultNodes(nodes, exportPass, workspaces);
+      triggerDownload(
+        `waymark-backup-${new Date().toISOString().slice(0, 10)}.vault.json`,
+        JSON.stringify(envelope, null, 2),
+        'application/json'
+      );
+      setExportPass('');
+      onNotify('已导出加密备份文件');
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : '导出加密备份失败');
+    }
   };
 
   const handleExportCsv = () => {

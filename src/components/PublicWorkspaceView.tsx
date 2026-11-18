@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { PublicWorkspaceViewData, ViewMode } from '../types/panel';
+import { copyTextToClipboard } from '../utils/crypto';
 
 interface PublicWorkspaceViewProps {
   loading: boolean;
@@ -78,14 +79,12 @@ export function PublicWorkspaceView({
   }, [workspace, searchQuery, selectedGroup]);
 
   const handleCopyUrl = async (id: string, url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
+    const ok = await copyTextToClipboard(url);
+    if (ok) {
       setCopiedId(id);
       window.setTimeout(() => {
         setCopiedId((prev) => (prev === id ? null : prev));
       }, 1400);
-    } catch {
-      // Ignore clipboard failure
     }
   };
 

@@ -33,7 +33,7 @@ import {
   syncPublicWorkspace,
   type AdminAuthStatus,
 } from './utils/auth';
-import { decryptVaultBundle, encryptVaultNodes } from './utils/crypto';
+import { copyTextToClipboard, decryptVaultBundle, encryptVaultNodes, generateId } from './utils/crypto';
 import {
   buildPanelTargetUrl,
   normalizeBaseUrl,
@@ -584,7 +584,7 @@ export default function App() {
       const created: PanelNode = {
         ...data,
         workspaceId: targetWorkspaceId,
-        id: crypto.randomUUID(),
+        id: generateId(),
         createdAt: now,
         updatedAt: now,
       };
@@ -659,7 +659,7 @@ export default function App() {
       notify(`已更新工作空间「${data.name}」`);
     } else {
       const created: Workspace = {
-        id: `ws-${crypto.randomUUID().slice(0, 8)}`,
+        id: `ws-${generateId().slice(0, 8)}`,
         name: data.name,
         description: data.description,
         groups: [...DEFAULT_WORKSPACE_GROUPS],
@@ -866,12 +866,8 @@ export default function App() {
   };
 
   const handleCopy = async (label: string, value: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      notify(`已复制${label}`);
-    } catch {
-      notify(`复制${label}失败`);
-    }
+    const ok = await copyTextToClipboard(value);
+    notify(ok ? `已复制${label}` : `复制${label}失败`);
   };
 
   const handleTogglePin = (node: PanelNode) => {

@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Activity, ArrowRight, Eye, EyeOff, Loader2, Server, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { GroupCombobox } from './CustomSelect';
@@ -44,6 +44,14 @@ export function FirstPanelOnboarding({
   const [errorMsg, setErrorMsg] = useState('');
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<PanelProbeResult | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  const showError = (msg: string) => {
+    setErrorMsg(msg);
+    requestAnimationFrame(() => {
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  };
 
   useEffect(() => {
     setGroup(workspace.groups[0] || '默认分组');
@@ -61,7 +69,7 @@ export function FirstPanelOnboarding({
   const handleTestProbe = async () => {
     const normalizedUrl = normalizeBaseUrl(baseUrl);
     if (!normalizedUrl) {
-      setErrorMsg('请先填写访问地址（例如 https://console.example.com:8080）再进行测试。');
+      showError('请先填写访问地址（例如 https://console.example.com:8080）再进行测试。');
       return;
     }
     setErrorMsg('');
@@ -90,34 +98,45 @@ export function FirstPanelOnboarding({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const normUrl = normalizeBaseUrl(baseUrl);
+    const split =
+      !entrance.trim() && baseUrl.trim()
+        ? splitFullPanelUrl(baseUrl, workspace.panelType || 'custom')
+        : { baseUrl, entrance };
+    const normUrl = normalizeBaseUrl(split.baseUrl || baseUrl);
+    const normEntrance = normalizeEntrance(entrance.trim() ? entrance : split.entrance);
+
     if (!name.trim()) {
-      setErrorMsg('请填写站点名称。');
+      showError('请填写站点名称。');
       return;
     }
     if (!normUrl) {
-      setErrorMsg('请填写有效的访问地址（支持 http:// 或 https://）。');
+      showError('请填写有效的访问地址（支持 http:// 或 https://）。');
       return;
     }
     if (autoFill && !username.trim()) {
-      setErrorMsg('开启自动登录填充时，请填写登录用户名。');
+      showError('开启自动登录填充时，请填写登录用户名。');
       return;
     }
 
-    onSaveFirstNode({
-      workspaceId: workspace.id,
-      name: name.trim(),
-      baseUrl: normUrl,
-      entrance: normalizeEntrance(entrance),
-      username: autoFill ? username.trim() : '',
-      password: autoFill ? password : '',
-      group: group.trim() || groupSuggestions[0] || '默认分组',
-      provider: '',
-      region: '',
-      version: 'v2',
-      autoSubmit: autoFill ? autoSubmit : false,
-      probe: probeResult ?? undefined,
-    });
+    setErrorMsg('');
+    try {
+      onSaveFirstNode({
+        workspaceId: workspace.id,
+        name: name.trim(),
+        baseUrl: normUrl,
+        entrance: normEntrance,
+        username: autoFill ? username.trim() : '',
+        password: autoFill ? password : '',
+        group: group.trim() || groupSuggestions[0] || '默认分组',
+        provider: '',
+        region: '',
+        version: 'v2',
+        autoSubmit: autoFill ? autoSubmit : false,
+        probe: probeResult ?? undefined,
+      });
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '保存站点失败，请重试。');
+    }
   };
 
   const previewTarget = buildPanelTargetUrl({
@@ -152,6 +171,7 @@ export function FirstPanelOnboarding({
           <AnimatePresence>
             {errorMsg && (
               <motion.div
+                ref={errorRef}
                 role="alert"
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}

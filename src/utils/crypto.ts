@@ -17,21 +17,71 @@ function base64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
+export function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+export async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fallback to execCommand below
+    }
+  }
+  if (typeof document === 'undefined') return false;
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-9999px';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+function assertSubtleCryptoAvailable(): SubtleCrypto {
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
+    throw new Error('当前为非 HTTPS 访问环境，浏览器禁用了 Web Crypto 加密接口，请在 HTTPS 或 localhost 下使用主密码加密。');
+  }
+  return crypto.subtle;
+}
+
 export function encodeBase64Url(str: string): string {
   const bytes = new TextEncoder().encode(str);
   return bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
+  const subtle = assertSubtleCryptoAvailable();
   const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
+  const keyMaterial = await subtle.importKey(
     'raw',
     enc.encode(passphrase),
     'PBKDF2',
     false,
     ['deriveKey']
   );
-  return crypto.subtle.deriveKey(
+  return subtle.deriveKey(
     {
       name: 'PBKDF2',
       salt: salt.buffer as ArrayBuffer,
@@ -55,7 +105,8 @@ export async function encryptVaultNodes(
   const key = await deriveKey(passphrase, salt);
   const payload = workspaces ? { nodes, workspaces } : nodes;
   const encoded = new TextEncoder().encode(JSON.stringify(payload));
-  const encryptedBuffer = await crypto.subtle.encrypt(
+  const subtle = assertSubtleCryptoAvailable();
+  const encryptedBuffer = await subtle.encrypt(
     { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
     key,
     encoded
@@ -88,7 +139,8 @@ export async function decryptVaultBundle(
   const iv = base64ToBytes(envelope.iv);
   const ciphertext = base64ToBytes(envelope.ciphertext);
   const key = await deriveKey(passphrase, salt);
-  const decrypted = await crypto.subtle.decrypt(
+  const subtle = assertSubtleCryptoAvailable();
+  const decrypted = await subtle.decrypt(
     { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
     key,
     ciphertext.buffer as ArrayBuffer

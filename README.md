@@ -41,7 +41,7 @@
 
 ### Docker 部署（推荐）
 
-每次推送代码时，GitHub Actions（`.github/workflows/docker-publish.yml`）会自动构建镜像并推送至 GitHub Container Registry（GHCR），镜像 Tag 格式为 `<7位CommitID>-<UTC时间戳>`。
+每次推送代码时，GitHub Actions（`.github/workflows/docker-publish.yml`）会自动构建镜像并推送至 GitHub Container Registry（GHCR），同时生成 `<7位CommitID>-<UTC时间戳>` 与 `latest` 两个标签。
 
 ```bash
 docker run -d \
@@ -51,7 +51,7 @@ docker run -d \
   -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD=change_me_strong_password \
   -e SESSION_SECRET=$(openssl rand -hex 32) \
-  ghcr.io/<your-github-username>/<your-repo-name>:<tag>
+  ghcr.io/<your-github-username>/<your-repo-name>:latest
 ```
 
 或使用 `docker-compose.yml`：
@@ -59,7 +59,7 @@ docker run -d \
 ```yaml
 services:
   waymark:
-    image: ghcr.io/<your-github-username>/<your-repo-name>:<tag>
+    image: ghcr.io/<your-github-username>/<your-repo-name>:latest
     container_name: waymark
     restart: unless-stopped
     ports:
