@@ -208,20 +208,30 @@ function isOriginMatch(itemOrigin, currentOrigin) {
   }
 }
 
+let storageQueue = Promise.resolve();
+
+function withStorageLock(fn) {
+  const next = storageQueue.then(() => fn(), () => fn());
+  storageQueue = next.catch(() => {});
+  return next;
+}
+
 async function storeLaunchPayload(rawPayload) {
   if (!rawPayload || !rawPayload.origin) return;
-  const current = await readPendingLaunches();
-  const launchKey = String(rawPayload.id || rawPayload.origin) + '|' + String(rawPayload.ts || Date.now());
-  const filtered = current.filter((item) => {
-    const existingKey = String(item.id || item.origin) + '|' + String(item.ts || 0);
-    return existingKey !== launchKey && item.origin !== rawPayload.origin;
+  return withStorageLock(async () => {
+    const current = await readPendingLaunches();
+    const launchKey = String(rawPayload.id || rawPayload.origin) + '|' + String(rawPayload.ts || Date.now());
+    const filtered = current.filter((item) => {
+      const existingKey = String(item.id || item.origin) + '|' + String(item.ts || 0);
+      return existingKey !== launchKey && !isOriginMatch(item.origin, rawPayload.origin);
+    });
+    filtered.unshift({
+      ...rawPayload,
+      ts: Date.now(),
+      filledTabs: [],
+    });
+    await writePendingLaunches(filtered);
   });
-  filtered.unshift({
-    ...rawPayload,
-    ts: Date.now(),
-    filledTabs: [],
-  });
-  await writePendingLaunches(filtered);
 }
 
 async function findMatchingLaunch(origin, tabId) {
@@ -237,20 +247,22 @@ async function findMatchingLaunch(origin, tabId) {
 
 async function markTabFilled(origin, tabId) {
   if (typeof tabId !== 'number') return;
-  const list = await readPendingLaunches();
-  let changed = false;
-  for (const item of list) {
-    if (isOriginMatch(item.origin, origin)) {
-      const filledTabs = Array.isArray(item.filledTabs) ? item.filledTabs : [];
-      if (!filledTabs.includes(tabId)) {
-        item.filledTabs = [...filledTabs, tabId];
-        changed = true;
+  return withStorageLock(async () => {
+    const list = await readPendingLaunches();
+    let changed = false;
+    for (const item of list) {
+      if (isOriginMatch(item.origin, origin)) {
+        const filledTabs = Array.isArray(item.filledTabs) ? item.filledTabs : [];
+        if (!filledTabs.includes(tabId)) {
+          item.filledTabs = [...filledTabs, tabId];
+          changed = true;
+        }
       }
     }
-  }
-  if (changed) {
-    await writePendingLaunches(list);
-  }
+    if (changed) {
+      await writePendingLaunches(list);
+    }
+  });
 }
 
 async function injectAutofillForTab(tabId, urlString) {
@@ -512,7 +524,7 @@ async function handleProbeUrl(req) {
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab && tab.url) {
+  if ((changeInfo.status === 'complete' || changeInfo.url) && tab && tab.url) {
     void injectAutofillForTab(tabId, tab.url);
   }
 });
@@ -565,7 +577,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === 'CLEAR_LAUNCHES') {
-    writePendingLaunches([])
+    withStorageLock(() => writePendingLaunches([]))
       .then(() => sendResponse({ ok: true }))
       .catch(() => sendResponse({ ok: false }));
     return true;
@@ -581,13 +593,53 @@ function buildHubBridgeJs(): string {
   'use strict';
 
   const EXT_VERSION = '${EXTENSION_VERSION}';
+  let lastLaunchSig = '';
+  let lastLaunchAt = 0;
+
+  function isExtensionContextValid() {
+    try {
+      return typeof chrome !== 'undefined' && Boolean(chrome.runtime && chrome.runtime.id);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function safeSendMessage(message, callback) {
+    if (!isExtensionContextValid()) {
+      if (typeof callback === 'function') {
+        callback(null, 'Extension context invalidated');
+      }
+      return false;
+    }
+    try {
+      chrome.runtime.sendMessage(message, (res) => {
+        let errMsg = '';
+        try {
+          if (chrome.runtime && chrome.runtime.lastError) {
+            errMsg = chrome.runtime.lastError.message || '扩展通信失败';
+          }
+        } catch (err) {
+          errMsg = (err && err.message) || 'Extension context invalidated';
+        }
+        if (typeof callback === 'function') {
+          callback(res, errMsg);
+        }
+      });
+      return true;
+    } catch (err) {
+      if (typeof callback === 'function') {
+        callback(null, (err && err.message) || 'Extension context invalidated');
+      }
+      return false;
+    }
+  }
 
   function isHubDocument() {
     return Boolean(document.querySelector('meta[name="1panel-hub-bridge"]'));
   }
 
   function markHubReady() {
-    if (!isHubDocument()) return false;
+    if (!isHubDocument() || !isExtensionContextValid()) return false;
     document.documentElement.setAttribute('data-waymark-extension', EXT_VERSION);
     if (!document.documentElement.getAttribute('data-paneldeck-bridge')) {
       document.documentElement.setAttribute('data-paneldeck-bridge', EXT_VERSION);
@@ -634,6 +686,7 @@ function buildHubBridgeJs(): string {
   }
 
   function captureHashLaunch() {
+    if (!isExtensionContextValid()) return;
     if (!location.hash || !location.hash.includes('_1p_autologin=')) return;
     try {
       const match = location.hash.match(/_1p_autologin=([A-Za-z0-9_-]+)/);
@@ -643,12 +696,9 @@ function buildHubBridgeJs(): string {
           .replace(/[#&]_1p_autologin=[A-Za-z0-9_-]+/g, '')
           .replace(/^_1p_autologin=[A-Za-z0-9_-]+/, '');
         history.replaceState(null, '', location.pathname + location.search + cleanedHash);
-        chrome.runtime.sendMessage({ type: 'STORE_LAUNCH', payload: parsed }, () => {
-          void chrome.runtime.lastError;
-          if (!isHubDocument()) {
-            chrome.runtime.sendMessage({ type: 'CHECK_TAB_AUTOFILL', url: location.href }, () => {
-              void chrome.runtime.lastError;
-            });
+        safeSendMessage({ type: 'STORE_LAUNCH', payload: parsed }, (_res, errMsg) => {
+          if (!errMsg && !isHubDocument()) {
+            safeSendMessage({ type: 'CHECK_TAB_AUTOFILL', url: location.href });
           }
         });
       }
@@ -663,20 +713,28 @@ function buildHubBridgeJs(): string {
 
     if (data.source === 'waymark-hub' && data.type === '${EXTENSION_PROBE_REQUEST}') {
       if (!isHubDocument() || !data.requestId || !data.url) return;
-      chrome.runtime.sendMessage({ type: 'PROBE_URL', payload: data }, (result) => {
-        const err = chrome.runtime.lastError;
-        const payload = err
-          ? { ok: false, error: 'extension_error', message: err.message || '扩展通信失败' }
+      safeSendMessage({ type: 'PROBE_URL', payload: data }, (result, errMsg) => {
+        const isInvalidated = /invalidated/i.test(errMsg || '');
+        const payload = errMsg
+          ? {
+              ok: false,
+              error: isInvalidated ? 'extension_invalidated' : 'extension_error',
+              message: isInvalidated
+                ? '插件刚更新或已重载，请刷新当前 Waymark 页面后再试'
+                : errMsg || '扩展通信失败',
+            }
           : result || { ok: false, error: 'no_response', message: '扩展未返回结果' };
-        window.postMessage(
-          {
-            source: 'waymark-extension',
-            type: '${EXTENSION_PROBE_RESULT}',
-            requestId: data.requestId,
-            result: payload,
-          },
-          '*'
-        );
+        try {
+          window.postMessage(
+            {
+              source: 'waymark-extension',
+              type: '${EXTENSION_PROBE_RESULT}',
+              requestId: data.requestId,
+              result: payload,
+            },
+            '*'
+          );
+        } catch (_) {}
       });
       return;
     }
@@ -686,25 +744,30 @@ function buildHubBridgeJs(): string {
       data.type === 'waymark-hub-launch'
     ) {
       if (!isHubDocument() || !data.payload) return;
-      const parsed = typeof data.payload === 'string' ? JSON.parse(data.payload) : data.payload;
-      chrome.runtime.sendMessage({ type: 'STORE_LAUNCH', payload: parsed }, () => {
-        void chrome.runtime.lastError;
-      });
+      let parsed = null;
+      try {
+        parsed = typeof data.payload === 'string' ? JSON.parse(data.payload) : data.payload;
+      } catch (_) {
+        return;
+      }
+      if (!parsed || typeof parsed !== 'object') return;
+      const sig = String(parsed.id || parsed.origin || '') + '|' + String(parsed.ts || '');
+      const now = Date.now();
+      if (sig === lastLaunchSig && now - lastLaunchAt < 1000) return;
+      lastLaunchSig = sig;
+      lastLaunchAt = now;
+      safeSendMessage({ type: 'STORE_LAUNCH', payload: parsed });
       return;
     }
 
     if (data.source === 'waymark-autofill' && data.type === 'WAYMARK_AUTOFILL_FILLED') {
-      chrome.runtime.sendMessage({ type: 'MARK_TAB_FILLED', origin: location.origin }, () => {
-        void chrome.runtime.lastError;
-      });
+      safeSendMessage({ type: 'MARK_TAB_FILLED', origin: location.origin });
     }
   });
 
   function triggerTabAutofillCheck() {
-    if (isHubDocument()) return;
-    chrome.runtime.sendMessage({ type: 'CHECK_TAB_AUTOFILL', url: location.href }, () => {
-      void chrome.runtime.lastError;
-    });
+    if (isHubDocument() || !isExtensionContextValid()) return;
+    safeSendMessage({ type: 'CHECK_TAB_AUTOFILL', url: location.href });
   }
 
   if (document.readyState !== 'loading') {

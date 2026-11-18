@@ -547,7 +547,7 @@ function probeViaExtension(params: {
     return Promise.resolve(null);
   }
   const version = getExtensionVersion();
-  if (!version || !isVersionAtLeast(version, EXTENSION_VERSION)) {
+  if (!version || !isVersionAtLeast(version, '2.0.0')) {
     return Promise.resolve(null);
   }
 

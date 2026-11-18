@@ -1,4 +1,4 @@
-export const EXTENSION_VERSION = '2.0.0';
+export const EXTENSION_VERSION = '2.0.1';
 export const EXTENSION_READY_EVENT = 'waymark-extension-ready';
 export const EXTENSION_PROBE_REQUEST = 'WAYMARK_PROBE_REQUEST';
 export const EXTENSION_PROBE_RESULT = 'WAYMARK_PROBE_RESULT';

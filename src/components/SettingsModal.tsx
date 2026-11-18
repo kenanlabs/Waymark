@@ -455,7 +455,7 @@ export function SettingsModal({
                               03.
                             </span>
                             <span>
-                              点击「加载已解压的扩展程序」，选中解压后的文件夹，然后刷新 Waymark 页面即可生效。
+                              点击「加载已解压的扩展程序」，选中解压后的文件夹；若此前已打开 Waymark 页面，请<strong className="font-medium text-[#09090B] dark:text-[#FAFAFA]">刷新该页面</strong>使新版插件重新连接。
                             </span>
                           </li>
                         </ol>

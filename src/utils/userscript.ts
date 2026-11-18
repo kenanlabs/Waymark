@@ -201,9 +201,6 @@ function __wmSetValue(el, value) {
   try { el.focus({ preventScroll: true }); } catch (_) {}
   var W = __wmView(el);
   try {
-    el.dispatchEvent(new W.Event('compositionstart', { bubbles: true }));
-  } catch (_) {}
-  try {
     var proto = Object.getPrototypeOf(el);
     var desc = (proto && Object.getOwnPropertyDescriptor(proto, 'value')) ||
       Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, 'value');
@@ -221,9 +218,6 @@ function __wmSetValue(el, value) {
   } catch (_) {
     try { el.dispatchEvent(new W.Event('input', { bubbles: true })); } catch (__) {}
   }
-  try {
-    el.dispatchEvent(new W.Event('compositionend', { bubbles: true }));
-  } catch (_) {}
   try {
     el.dispatchEvent(new W.Event('change', { bubbles: true }));
   } catch (_) {}
