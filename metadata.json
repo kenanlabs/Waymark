@@ -1,0 +1,6 @@
+{
+  "name": "Waymark",
+  "description": "多工作空间统一入口导航与管理台，支持自定义公开访问空间与域名、分组整理及按需自动登录填充。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
