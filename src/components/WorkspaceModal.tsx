@@ -1,11 +1,18 @@
 import { useEffect, useId, useState } from 'react';
 import { ArrowUpRight, Check, Copy, Eye, Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { Workspace } from '../types/panel';
+import { CustomSelect } from './CustomSelect';
+import type {
+  CustomFieldPlacement,
+  Workspace,
+  WorkspaceCustomFieldDef,
+} from '../types/panel';
 import { copyTextToClipboard } from '../utils/crypto';
 import {
+  CUSTOM_FIELD_PLACEMENT_OPTIONS,
   normalizePublicDomain,
   normalizePublicRoute,
+  normalizeWorkspaceCustomFields,
   parsePublicDomainInput,
   validatePublicDomain,
   validatePublicRoute,
@@ -22,6 +29,7 @@ interface WorkspaceModalProps {
     data: {
       name: string;
       description: string;
+      customFields: WorkspaceCustomFieldDef[];
       isPublic: boolean;
       publicRoute: string;
       publicDomain: string;
@@ -31,6 +39,12 @@ interface WorkspaceModalProps {
   ) => Promise<string | null> | string | null;
   onDelete: (id: string) => void;
 }
+
+const CUSTOM_FIELD_PLACEHOLDERS = [
+  '例如：所属环境 / 部门 / 地域',
+  '例如：归属团队 / 线路 / 用途',
+  '例如：备注说明 / 负责人 / 到期时间',
+];
 
 export function WorkspaceModal({
   open,
@@ -45,6 +59,9 @@ export function WorkspaceModal({
   const uid = useId();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [customFields, setCustomFields] = useState<WorkspaceCustomFieldDef[]>(() =>
+    normalizeWorkspaceCustomFields()
+  );
   const [isPublic, setIsPublic] = useState(false);
   const [publicDomain, setPublicDomain] = useState('');
   const [publicRoute, setPublicRoute] = useState('');
@@ -63,6 +80,7 @@ export function WorkspaceModal({
     if (editingWorkspace) {
       setName(editingWorkspace.name);
       setDescription(editingWorkspace.description || '');
+      setCustomFields(normalizeWorkspaceCustomFields(editingWorkspace.customFields));
       setIsPublic(Boolean(editingWorkspace.isPublic));
       if (editingWorkspace.publicDomain) {
         setPublicDomain(
@@ -77,6 +95,7 @@ export function WorkspaceModal({
     } else {
       setName('');
       setDescription('');
+      setCustomFields(normalizeWorkspaceCustomFields());
       setIsPublic(false);
       setPublicDomain('');
       setPublicRoute('');
@@ -180,6 +199,7 @@ export function WorkspaceModal({
       {
         name: trimmedName,
         description: description.trim(),
+        customFields: normalizeWorkspaceCustomFields(customFields),
         isPublic,
         publicRoute: finalRoute,
         publicDomain: finalDomain,
@@ -212,7 +232,7 @@ export function WorkspaceModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 10 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="relative z-10 w-full max-w-md bg-white dark:bg-[#111113] border border-[#E4E4E7] dark:border-[#27272A] rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.18)] overflow-hidden flex flex-col max-h-[86vh]"
+            className="relative z-10 w-full max-w-lg bg-white dark:bg-[#111113] border border-[#E4E4E7] dark:border-[#27272A] rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.18)] overflow-hidden flex flex-col max-h-[88vh]"
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#E4E4E7] dark:border-[#27272A]">
               <div>
@@ -223,7 +243,7 @@ export function WorkspaceModal({
                   {editingWorkspace ? '空间设置' : '新建工作空间'}
                 </h2>
                 <p className="mt-0.5 text-[12px] text-[#71717A] dark:text-[#A1A1AA]">
-                  自定义空间标题、描述及公开访问方式
+                  自定义空间标题、补充信息字段与公开访问方式
                 </p>
               </div>
               <button
@@ -279,6 +299,63 @@ export function WorkspaceModal({
                   placeholder="简单说明该工作空间的用途..."
                   className="w-full px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                 />
+              </div>
+
+              <div className="pt-2 border-t border-[#E4E4E7] dark:border-[#27272A] space-y-2.5">
+                <div>
+                  <span className="block text-xs font-medium text-[#09090B] dark:text-[#FAFAFA]">
+                    可选补充信息字段（固定 3 个槽位，留空不启用）
+                  </span>
+                  <span className="block text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
+                    为本空间自定义补充信息字段名及展示位置，固定槽位避免卡片信息过载
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {customFields.map((field, idx) => (
+                    <div key={field.key} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                      <div className="sm:col-span-6">
+                        <label htmlFor={`${uid}-cf-${field.key}`} className="sr-only">
+                          自定义字段 {idx + 1} 名称
+                        </label>
+                        <input
+                          id={`${uid}-cf-${field.key}`}
+                          type="text"
+                          value={field.label}
+                          onChange={(e) =>
+                            setCustomFields((prev) =>
+                              prev.map((item) =>
+                                item.key === field.key ? { ...item, label: e.target.value } : item
+                              )
+                            )
+                          }
+                          placeholder={`字段 ${idx + 1}：${CUSTOM_FIELD_PLACEHOLDERS[idx] || ''}`}
+                          className="w-full h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
+                        />
+                      </div>
+                      <div className="sm:col-span-6">
+                        <CustomSelect<CustomFieldPlacement>
+                          ariaLabel={`字段 ${idx + 1} 显示位置`}
+                          value={field.placement}
+                          onChange={(placement) =>
+                            setCustomFields((prev) =>
+                              prev.map((item) =>
+                                item.key === field.key ? { ...item, placement } : item
+                              )
+                            )
+                          }
+                          fullWidth
+                          size="md"
+                          align="right"
+                          options={CUSTOM_FIELD_PLACEMENT_OPTIONS.map((opt) => ({
+                            value: opt.value,
+                            label: opt.label,
+                          }))}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="pt-2 border-t border-[#E4E4E7] dark:border-[#27272A] space-y-3">

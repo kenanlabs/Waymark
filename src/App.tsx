@@ -23,6 +23,7 @@ import type {
   SortOption,
   ViewMode,
   Workspace,
+  WorkspaceCustomFieldDef,
 } from './types/panel';
 import {
   fetchAdminState,
@@ -51,6 +52,7 @@ import {
   createDefaultWorkspace,
   DEFAULT_WORKSPACE_GROUPS,
   DEFAULT_WORKSPACE_ID,
+  normalizeWorkspaceCustomFields,
 } from './utils/workspacePresets';
 
 const STORAGE_KEY = 'paneldeck_vault_v1';
@@ -143,7 +145,7 @@ export default function App() {
       return 'grid';
     }
   });
-  const [sortBy, setSortBy] = useState<SortOption>('pinned');
+  const [sortBy, setSortBy] = useState<SortOption>('default');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
 
@@ -620,14 +622,16 @@ export default function App() {
               : fallbackWsId;
           return resolved === wsId;
         })
+        .sort((a, b) => {
+          if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
+          return 0;
+        })
         .map((n) => ({
           id: n.id,
           name: n.name,
           targetUrl: buildPanelTargetUrl(n),
           group: n.group || '默认分组',
-          provider: n.provider || undefined,
-          region: n.region || undefined,
-          notes: n.notes || undefined,
+          customValues: n.customValues,
           pinned: Boolean(n.pinned),
         }));
     },
@@ -651,6 +655,7 @@ export default function App() {
         const signature = JSON.stringify({
           name: ws.name,
           description: ws.description || '',
+          customFields: ws.customFields || [],
           publicRoute: ws.publicRoute || '',
           publicDomain: ws.publicDomain || '',
           publicProtocol: ws.publicProtocol || 'https',
@@ -759,42 +764,55 @@ export default function App() {
     }));
   }, [allKnownGroups, groupCounts]);
 
+  const sortWorkspaceNodes = useCallback(
+    (list: PanelNode[], mode: SortOption, baseOrderNodes: PanelNode[]): PanelNode[] => {
+      const indexMap = new Map<string, number>();
+      baseOrderNodes.forEach((n, idx) => indexMap.set(n.id, idx));
+      return [...list].sort((a, b) => {
+        // Pinned items always remain at the top across all sort modes
+        if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
+
+        if (mode === 'recent') {
+          const ta = a.lastAccessedAt ? Date.parse(a.lastAccessedAt) : 0;
+          const tb = b.lastAccessedAt ? Date.parse(b.lastAccessedAt) : 0;
+          if (ta !== tb) return tb - ta;
+          return (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0);
+        }
+        if (mode === 'group') {
+          const ga = (a.group || '默认分组').localeCompare(b.group || '默认分组', 'zh-CN');
+          if (ga !== 0) return ga;
+          return (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0);
+        }
+        if (mode === 'name') {
+          return a.name.localeCompare(b.name, 'zh-CN');
+        }
+        // 'default' preserves custom drag-and-drop / array order
+        return (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0);
+      });
+    },
+    []
+  );
+
   const filteredNodes = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const list = workspaceNodes.filter((node) => {
       if (selectedGroup !== 'all' && (node.group || '默认分组') !== selectedGroup) return false;
       if (!q) return true;
+      const customMatch = Object.values(node.customValues || {}).some((val) =>
+        (val || '').toLowerCase().includes(q)
+      );
       return (
         node.name.toLowerCase().includes(q) ||
         node.baseUrl.toLowerCase().includes(q) ||
         node.entrance.toLowerCase().includes(q) ||
         node.username.toLowerCase().includes(q) ||
         node.group.toLowerCase().includes(q) ||
-        node.provider.toLowerCase().includes(q) ||
-        node.region.toLowerCase().includes(q) ||
-        (node.notes || '').toLowerCase().includes(q)
+        customMatch
       );
     });
 
-    return [...list].sort((a, b) => {
-      if (sortBy === 'pinned') {
-        if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
-        return a.name.localeCompare(b.name, 'zh-CN');
-      }
-      if (sortBy === 'recent') {
-        const ta = a.lastAccessedAt ? Date.parse(a.lastAccessedAt) : 0;
-        const tb = b.lastAccessedAt ? Date.parse(b.lastAccessedAt) : 0;
-        if (ta !== tb) return tb - ta;
-        return a.name.localeCompare(b.name, 'zh-CN');
-      }
-      if (sortBy === 'group') {
-        const ga = (a.group || '默认分组').localeCompare(b.group || '默认分组', 'zh-CN');
-        if (ga !== 0) return ga;
-        return a.name.localeCompare(b.name, 'zh-CN');
-      }
-      return a.name.localeCompare(b.name, 'zh-CN');
-    });
-  }, [workspaceNodes, searchQuery, selectedGroup, sortBy]);
+    return sortWorkspaceNodes(list, sortBy, workspaceNodes);
+  }, [workspaceNodes, searchQuery, selectedGroup, sortBy, sortWorkspaceNodes]);
 
   const updateActiveWorkspaceGroups = useCallback(
     (updater: (prevGroups: string[]) => string[]) => {
@@ -855,10 +873,25 @@ export default function App() {
     setSelectedGroup('all');
   };
 
+  const handleUpdateWorkspaceCustomFields = useCallback(
+    (fields: WorkspaceCustomFieldDef[]) => {
+      const now = new Date().toISOString();
+      const normalized = normalizeWorkspaceCustomFields(fields);
+      const nextWorkspaces = workspaces.map((ws) =>
+        ws.id === activeWorkspace.id ? { ...ws, customFields: normalized, updatedAt: now } : ws
+      );
+      setWorkspaces(nextWorkspaces);
+      void persistNodes(nodes, undefined, nextWorkspaces);
+      notify('已更新当前空间的补充信息字段配置');
+    },
+    [activeWorkspace.id, workspaces, nodes, persistNodes, notify]
+  );
+
   const handleSaveWorkspace = async (
     data: {
       name: string;
       description: string;
+      customFields: WorkspaceCustomFieldDef[];
       isPublic: boolean;
       publicRoute: string;
       publicDomain: string;
@@ -867,6 +900,7 @@ export default function App() {
     existingId?: string
   ): Promise<string | null> => {
     const now = new Date().toISOString();
+    const normalizedCustomFields = normalizeWorkspaceCustomFields(data.customFields);
     if (existingId) {
       const targetWs = workspaces.find((w) => w.id === existingId);
       if (!targetWs) return '未找到对应工作空间';
@@ -874,6 +908,7 @@ export default function App() {
         ...targetWs,
         name: data.name,
         description: data.description,
+        customFields: normalizedCustomFields,
         isPublic: data.isPublic,
         publicRoute: data.isPublic ? data.publicRoute : '',
         publicDomain: data.isPublic ? data.publicDomain : '',
@@ -891,6 +926,7 @@ export default function App() {
         lastSyncedPublicRef.current[existingId] = JSON.stringify({
           name: updatedWs.name,
           description: updatedWs.description || '',
+          customFields: updatedWs.customFields || [],
           publicRoute: updatedWs.publicRoute || '',
           publicDomain: updatedWs.publicDomain || '',
           publicProtocol: updatedWs.publicProtocol || 'https',
@@ -910,6 +946,7 @@ export default function App() {
         name: data.name,
         description: data.description,
         groups: [...DEFAULT_WORKSPACE_GROUPS],
+        customFields: normalizedCustomFields,
         isPublic: data.isPublic,
         publicRoute: data.isPublic ? data.publicRoute : '',
         publicDomain: data.isPublic ? data.publicDomain : '',
@@ -927,6 +964,7 @@ export default function App() {
         lastSyncedPublicRef.current[created.id] = JSON.stringify({
           name: created.name,
           description: created.description || '',
+          customFields: created.customFields || [],
           publicRoute: created.publicRoute || '',
           publicDomain: created.publicDomain || '',
           publicProtocol: created.publicProtocol || 'https',
@@ -1135,6 +1173,72 @@ export default function App() {
     updateNodes((prev) =>
       prev.map((item) => (item.id === node.id ? { ...item, pinned: !item.pinned } : item))
     );
+  };
+
+  const handleReorderNodes = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    if (sortBy !== 'default') {
+      setSortBy('default');
+    }
+
+    updateNodes((prev) => {
+      const wsIndices: number[] = [];
+      const wsItems: PanelNode[] = [];
+      prev.forEach((item, idx) => {
+        if (resolveNodeWorkspaceId(item) === activeWorkspace.id) {
+          wsIndices.push(idx);
+          wsItems.push(item);
+        }
+      });
+
+      const currentOrderedWs = sortWorkspaceNodes(wsItems, sortBy, wsItems);
+      const visibleIds = filteredNodes.map((n) => n.id);
+      const visibleIdSet = new Set(visibleIds);
+
+      const pinnedVisible = filteredNodes.filter((n) => Boolean(n.pinned));
+      const unpinnedVisible = filteredNodes.filter((n) => !n.pinned);
+
+      const dragNode = filteredNodes.find((n) => n.id === fromId);
+      const targetNode = filteredNodes.find((n) => n.id === toId);
+      if (!dragNode || !targetNode) return prev;
+
+      const dragPinned = Boolean(dragNode.pinned);
+      const targetPinned = Boolean(targetNode.pinned);
+
+      if (dragPinned) {
+        const fromIdx = pinnedVisible.findIndex((n) => n.id === fromId);
+        if (fromIdx === -1) return prev;
+        const toIdx = targetPinned ? pinnedVisible.findIndex((n) => n.id === toId) : -1;
+        const [moved] = pinnedVisible.splice(fromIdx, 1);
+        if (targetPinned && toIdx !== -1) {
+          pinnedVisible.splice(toIdx, 0, moved);
+        } else {
+          pinnedVisible.push(moved);
+        }
+      } else {
+        const fromIdx = unpinnedVisible.findIndex((n) => n.id === fromId);
+        if (fromIdx === -1) return prev;
+        const toIdx = !targetPinned ? unpinnedVisible.findIndex((n) => n.id === toId) : -1;
+        const [moved] = unpinnedVisible.splice(fromIdx, 1);
+        if (!targetPinned && toIdx !== -1) {
+          unpinnedVisible.splice(toIdx, 0, moved);
+        } else {
+          unpinnedVisible.unshift(moved);
+        }
+      }
+
+      const reorderedVisible = [...pinnedVisible, ...unpinnedVisible];
+      let visibleCursor = 0;
+      const nextWsItems = currentOrderedWs.map((item) =>
+        visibleIdSet.has(item.id) ? reorderedVisible[visibleCursor++] : item
+      );
+
+      const nextAll = [...prev];
+      wsIndices.forEach((globalIdx, pos) => {
+        nextAll[globalIdx] = nextWsItems[pos];
+      });
+      return nextAll;
+    });
   };
 
   const handleImportNodes = (
@@ -1382,7 +1486,7 @@ export default function App() {
                   value={sortBy}
                   onChange={setSortBy}
                   options={[
-                    { value: 'pinned', label: '置顶优先' },
+                    { value: 'default', label: '默认排序' },
                     { value: 'recent', label: '最近访问' },
                     { value: 'name', label: '名称排序' },
                     { value: 'group', label: '按分组' },
@@ -1470,12 +1574,14 @@ export default function App() {
                   <PanelGrid
                     nodes={filteredNodes}
                     panelType={activeWorkspace.panelType}
+                    customFields={activeWorkspace.customFields}
                     onEdit={(n) => {
                       setEditingNode(n);
                       setDrawerOpen(true);
                     }}
                     onLaunch={handleLaunchNode}
                     onTogglePin={handleTogglePin}
+                    onReorder={handleReorderNodes}
                     onCopy={handleCopy}
                   />
                 </motion.div>
@@ -1490,6 +1596,7 @@ export default function App() {
                   <PanelTable
                     nodes={filteredNodes}
                     panelType={activeWorkspace.panelType}
+                    customFields={activeWorkspace.customFields}
                     onEdit={(n) => {
                       setEditingNode(n);
                       setDrawerOpen(true);
@@ -1516,6 +1623,7 @@ export default function App() {
           setEditingNode(null);
         }}
         onSave={handleSaveNode}
+        onUpdateWorkspaceFields={handleUpdateWorkspaceCustomFields}
         onDelete={handleDeleteNode}
       />
 

@@ -14,12 +14,14 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import type { PanelNode, PanelType } from '../types/panel';
+import type { PanelNode, PanelType, WorkspaceCustomFieldDef } from '../types/panel';
 import { buildBridgeLaunchUrl, buildPanelTargetUrl } from '../utils/userscript';
+import { resolveNodeCustomEntries } from '../utils/workspacePresets';
 
 interface PanelTableProps {
   nodes: PanelNode[];
   panelType?: PanelType;
+  customFields?: WorkspaceCustomFieldDef[];
   onEdit: (node: PanelNode) => void;
   onLaunch: (node: PanelNode) => void;
   onProbe: (node: PanelNode) => void;
@@ -87,6 +89,7 @@ function renderProbeStatus(node: PanelNode) {
 export function PanelTable({
   nodes,
   panelType,
+  customFields,
   onEdit,
   onLaunch,
   onProbe,
@@ -125,6 +128,20 @@ export function PanelTable({
             const targetUrl = buildPanelTargetUrl(node);
             const launchUrl = buildBridgeLaunchUrl(node, panelType);
             const isRevealed = Boolean(revealedIds[node.id]);
+            const entries = resolveNodeCustomEntries(node, customFields);
+            const topEntries = entries.filter((e) => e.placement === 'card_top');
+            const bottomEntries = entries.filter((e) => e.placement === 'card_bottom');
+            const detailEntries = entries.filter((e) => e.placement === 'detail_only');
+            const groupLine = [node.group || '默认分组', ...topEntries.map((e) => e.value)]
+              .filter(Boolean)
+              .join(' · ');
+            const detailLine = detailEntries.map((e) => `${e.label}: ${e.value}`).join(' · ');
+            const urlSubLine = [
+              node.entrance ? `入口 ${node.entrance}` : '',
+              ...bottomEntries.map((e) => `${e.label}: ${e.value}`),
+            ]
+              .filter(Boolean)
+              .join(' · ');
 
             return (
               <motion.tr
@@ -158,17 +175,20 @@ export function PanelTable({
                   <div className="font-medium text-[13px] text-[#09090B] dark:text-[#FAFAFA] truncate">
                     {node.name}
                   </div>
-                  <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate">
-                    <span className="truncate">{node.group}</span>
-                    {(node.provider || node.region) && (
-                      <>
-                        <span aria-hidden="true">·</span>
-                        <span className="truncate">
-                          {[node.provider, node.region].filter(Boolean).join(' ')}
-                        </span>
-                      </>
-                    )}
+                  <div
+                    className="mt-0.5 text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate"
+                    title={groupLine}
+                  >
+                    {groupLine}
                   </div>
+                  {detailLine && (
+                    <div
+                      className="mt-0.5 text-[11px] text-[#A1A1AA] dark:text-[#71717A] truncate"
+                      title={detailLine}
+                    >
+                      {detailLine}
+                    </div>
+                  )}
                 </td>
 
                 <td className="py-3 px-2.5 align-middle min-w-0">
@@ -193,9 +213,12 @@ export function PanelTable({
                       )}
                     </button>
                   </div>
-                  {node.entrance && (
-                    <div className="mt-0.5 text-[11px] font-mono text-[#A1A1AA] truncate">
-                      入口 {node.entrance}
+                  {urlSubLine && (
+                    <div
+                      className="mt-0.5 text-[11px] text-[#A1A1AA] truncate"
+                      title={urlSubLine}
+                    >
+                      {urlSubLine}
                     </div>
                   )}
                 </td>
@@ -309,6 +332,11 @@ export function PanelTable({
           const targetUrl = buildPanelTargetUrl(node);
           const launchUrl = buildBridgeLaunchUrl(node, panelType);
           const isRevealed = Boolean(revealedIds[node.id]);
+          const entries = resolveNodeCustomEntries(node, customFields);
+          const topEntries = entries.filter((e) => e.placement === 'card_top');
+          const bottomAndDetail = entries.filter(
+            (e) => e.placement === 'card_bottom' || e.placement === 'detail_only'
+          );
 
           return (
             <motion.div
@@ -328,11 +356,18 @@ export function PanelTable({
                     <span className="font-medium text-sm text-[#09090B] dark:text-[#FAFAFA] truncate">
                       {node.name}
                     </span>
-                    <span className="text-[11px] text-[#71717A] shrink-0">{node.group}</span>
+                    <span className="text-[11px] text-[#71717A] truncate">
+                      {[node.group, ...topEntries.map((e) => e.value)].filter(Boolean).join(' · ')}
+                    </span>
                   </div>
                   <div className="mt-0.5 font-mono text-xs text-[#71717A] truncate">
                     {targetUrl}
                   </div>
+                  {bottomAndDetail.length > 0 && (
+                    <div className="mt-0.5 text-[11px] text-[#A1A1AA] truncate">
+                      {bottomAndDetail.map((e) => `${e.label}: ${e.value}`).join(' · ')}
+                    </div>
+                  )}
                 </div>
                 <a
                   href={launchUrl}

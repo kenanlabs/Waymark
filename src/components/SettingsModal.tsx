@@ -246,7 +246,7 @@ export function SettingsModal({
 
   const handleExportCsv = () => {
     const wsMap = new Map(workspaces.map((w) => [w.id, w.name]));
-    const header = 'workspace,name,baseUrl,entrance,username,password,group,provider,region';
+    const header = 'workspace,name,baseUrl,entrance,username,password,group,field1,field2,field3';
     const esc = (v: string) => `"${String(v || '').replace(/"/g, '""')}"`;
     const rows = nodes.map((n) =>
       [
@@ -257,8 +257,9 @@ export function SettingsModal({
         esc(n.username),
         esc(n.password),
         esc(n.group),
-        esc(n.provider),
-        esc(n.region),
+        esc(n.customValues?.field1 || ''),
+        esc(n.customValues?.field2 || ''),
+        esc(n.customValues?.field3 || ''),
       ].join(',')
     );
     triggerDownload(
@@ -609,7 +610,7 @@ export function SettingsModal({
                           htmlFor={`${uid}-batch`}
                           className="block text-xs font-medium text-[#27272A] dark:text-[#E4E4E7] mb-1.5"
                         >
-                          批量导入至「{activeWorkspace.name}」（每行一条，支持 CSV / 制表符 / 竖线 / JSON）：名称, 访问地址, [用户名], [密码], [路径], [分组]
+                          批量导入至「{activeWorkspace.name}」（每行一条，支持 CSV / 制表符 / 竖线 / JSON）：名称, 访问地址, [用户名], [密码], [路径], [分组], [字段1], [字段2], [字段3]
                         </label>
                         <textarea
                           id={`${uid}-batch`}
@@ -778,6 +779,10 @@ export function SettingsModal({
                           <form onSubmit={handleSetPassphrase} className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                             <input
                               type="password"
+                              autoComplete="new-password"
+                              data-bwignore="true"
+                              data-1p-ignore="true"
+                              data-lpignore="true"
                               value={pass1}
                               onChange={(e) => setPass1(e.target.value)}
                               placeholder="设置二次主密码（至少 6 位）"
@@ -785,6 +790,10 @@ export function SettingsModal({
                             />
                             <input
                               type="password"
+                              autoComplete="new-password"
+                              data-bwignore="true"
+                              data-1p-ignore="true"
+                              data-lpignore="true"
                               value={pass2}
                               onChange={(e) => setPass2(e.target.value)}
                               placeholder="确认二次主密码"
@@ -809,6 +818,10 @@ export function SettingsModal({
                           <div className="flex gap-2">
                             <input
                               type="password"
+                              autoComplete="new-password"
+                              data-bwignore="true"
+                              data-1p-ignore="true"
+                              data-lpignore="true"
                               value={exportPass}
                               onChange={(e) => setExportPass(e.target.value)}
                               placeholder="设置导出加密口令"
@@ -851,6 +864,10 @@ export function SettingsModal({
                             <form onSubmit={handleDecryptImport} className="flex gap-2 pt-1">
                               <input
                                 type="password"
+                                autoComplete="off"
+                                data-bwignore="true"
+                                data-1p-ignore="true"
+                                data-lpignore="true"
                                 value={importPass}
                                 onChange={(e) => setImportPass(e.target.value)}
                                 placeholder="输入解密口令"

@@ -5,12 +5,20 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  SlidersHorizontal,
   Trash2,
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { CustomSelect, GroupCombobox } from './CustomSelect';
-import type { PanelNode, PanelProbeResult, Workspace } from '../types/panel';
+import type {
+  CustomFieldKey,
+  CustomFieldPlacement,
+  PanelNode,
+  PanelProbeResult,
+  Workspace,
+  WorkspaceCustomFieldDef,
+} from '../types/panel';
 import { probePanelNode } from '../utils/auth';
 import {
   buildPanelTargetUrl,
@@ -18,6 +26,12 @@ import {
   normalizeEntrance,
   splitFullPanelUrl,
 } from '../utils/userscript';
+import {
+  CUSTOM_FIELD_PLACEMENT_OPTIONS,
+  FIXED_CUSTOM_FIELD_KEYS,
+  getActiveWorkspaceCustomFields,
+  normalizeWorkspaceCustomFields,
+} from '../utils/workspacePresets';
 
 interface PanelDrawerProps {
   open: boolean;
@@ -26,7 +40,19 @@ interface PanelDrawerProps {
   existingGroups: string[];
   onClose: () => void;
   onSave: (nodeData: Omit<PanelNode, 'id' | 'createdAt' | 'updatedAt'>, existingId?: string) => void;
+  onUpdateWorkspaceFields?: (fields: WorkspaceCustomFieldDef[]) => void;
   onDelete: (id: string) => void;
+}
+
+const SLOT_PLACEHOLDERS = [
+  '例如：所属环境 / 部门 / 地域',
+  '例如：归属团队 / 线路 / 用途',
+  '例如：备注说明 / 负责人 / 到期时间',
+];
+
+function placementShortLabel(placement: CustomFieldPlacement): string {
+  const found = CUSTOM_FIELD_PLACEMENT_OPTIONS.find((o) => o.value === placement);
+  return found ? found.shortLabel : '仅详细';
 }
 
 export function PanelDrawer({
@@ -36,6 +62,7 @@ export function PanelDrawer({
   existingGroups,
   onClose,
   onSave,
+  onUpdateWorkspaceFields,
   onDelete,
 }: PanelDrawerProps) {
   const formId = useId();
@@ -50,9 +77,15 @@ export function PanelDrawer({
   const [password, setPassword] = useState('');
   const [autoSubmit, setAutoSubmit] = useState(true);
   const [group, setGroup] = useState('默认分组');
-  const [provider, setProvider] = useState('');
-  const [region, setRegion] = useState('');
-  const [notes, setNotes] = useState('');
+  const [customValues, setCustomValues] = useState<Record<CustomFieldKey, string>>({
+    field1: '',
+    field2: '',
+    field3: '',
+  });
+  const [draftFields, setDraftFields] = useState<WorkspaceCustomFieldDef[]>(() =>
+    normalizeWorkspaceCustomFields(workspace.customFields)
+  );
+  const [editingFieldDefs, setEditingFieldDefs] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -60,6 +93,11 @@ export function PanelDrawer({
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<PanelProbeResult | null>(null);
+
+  const activeCustomFields = useMemo(
+    () => getActiveWorkspaceCustomFields(workspace.customFields),
+    [workspace.customFields]
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -69,8 +107,19 @@ export function PanelDrawer({
     setProbeResult(editingNode?.probe ?? null);
     setShowPassword(false);
 
+    const normalizedDefs = normalizeWorkspaceCustomFields(workspace.customFields);
+    setDraftFields(normalizedDefs);
+    const hasConfiguredDefs = normalizedDefs.some((d) => Boolean(d.label.trim()));
+    setEditingFieldDefs(!hasConfiguredDefs);
+
     if (editingNode) {
       const hasCreds = Boolean(editingNode.username || editingNode.password);
+      const nextVals: Record<CustomFieldKey, string> = {
+        field1: editingNode.customValues?.field1 || '',
+        field2: editingNode.customValues?.field2 || '',
+        field3: editingNode.customValues?.field3 || '',
+      };
+      const hasAnyVal = Boolean(nextVals.field1 || nextVals.field2 || nextVals.field3);
       setName(editingNode.name);
       setBaseUrl(editingNode.baseUrl);
       setEntrance(editingNode.entrance);
@@ -80,10 +129,8 @@ export function PanelDrawer({
       setPassword(editingNode.password);
       setAutoSubmit(editingNode.autoSubmit);
       setGroup(editingNode.group || '默认分组');
-      setProvider(editingNode.provider || '');
-      setRegion(editingNode.region || '');
-      setNotes(editingNode.notes || '');
-      setShowOptional(Boolean(editingNode.provider || editingNode.region || editingNode.notes));
+      setCustomValues(nextVals);
+      setShowOptional(hasAnyVal);
     } else {
       setName('');
       setBaseUrl('');
@@ -94,17 +141,18 @@ export function PanelDrawer({
       setPassword('');
       setAutoSubmit(true);
       setGroup(workspace.groups[0] || '默认分组');
-      setProvider('');
-      setRegion('');
-      setNotes('');
+      setCustomValues({ field1: '', field2: '', field3: '' });
       setShowOptional(false);
     }
   }, [open, editingNode, workspace]);
 
   const isDirty = useMemo(() => {
     if (!open) return false;
+    const hasCustomVal = Boolean(
+      customValues.field1 || customValues.field2 || customValues.field3
+    );
     if (!editingNode) {
-      return Boolean(name || baseUrl || entrance || username || password || provider || region || notes);
+      return Boolean(name || baseUrl || entrance || username || password || hasCustomVal);
     }
     const origHasCreds = Boolean(editingNode.username || editingNode.password);
     return (
@@ -116,10 +164,10 @@ export function PanelDrawer({
       username !== editingNode.username ||
       password !== editingNode.password ||
       group !== (editingNode.group || '默认分组') ||
-      provider !== (editingNode.provider || '') ||
-      region !== (editingNode.region || '') ||
       autoSubmit !== editingNode.autoSubmit ||
-      notes !== (editingNode.notes || '')
+      customValues.field1 !== (editingNode.customValues?.field1 || '') ||
+      customValues.field2 !== (editingNode.customValues?.field2 || '') ||
+      customValues.field3 !== (editingNode.customValues?.field3 || '')
     );
   }, [
     open,
@@ -132,10 +180,8 @@ export function PanelDrawer({
     username,
     password,
     group,
-    provider,
-    region,
     autoSubmit,
-    notes,
+    customValues,
   ]);
 
   const requestClose = () => {
@@ -183,6 +229,15 @@ export function PanelDrawer({
     }
   };
 
+  const handleSaveFieldDefs = () => {
+    const normalized = normalizeWorkspaceCustomFields(draftFields);
+    setDraftFields(normalized);
+    onUpdateWorkspaceFields?.(normalized);
+    if (normalized.some((d) => Boolean(d.label.trim()))) {
+      setEditingFieldDefs(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const normUrl = normalizeBaseUrl(baseUrl);
@@ -199,6 +254,20 @@ export function PanelDrawer({
       return;
     }
 
+    if (editingFieldDefs && onUpdateWorkspaceFields) {
+      const normalized = normalizeWorkspaceCustomFields(draftFields);
+      const currentNorm = normalizeWorkspaceCustomFields(workspace.customFields);
+      if (JSON.stringify(normalized) !== JSON.stringify(currentNorm)) {
+        onUpdateWorkspaceFields(normalized);
+      }
+    }
+
+    const cleanedValues: Partial<Record<CustomFieldKey, string>> = {};
+    for (const key of FIXED_CUSTOM_FIELD_KEYS) {
+      const val = (customValues[key] || '').trim();
+      if (val) cleanedValues[key] = val;
+    }
+
     onSave(
       {
         workspaceId: editingNode?.workspaceId ?? workspace.id,
@@ -209,11 +278,9 @@ export function PanelDrawer({
         password: autoFill ? password : '',
         authMode,
         group: group.trim() || '默认分组',
-        provider: provider.trim(),
-        region: region.trim(),
+        customValues: Object.keys(cleanedValues).length > 0 ? cleanedValues : undefined,
         version: editingNode?.version ?? 'v2',
         autoSubmit: autoFill && authMode === 'form' ? autoSubmit : false,
-        notes: notes.trim() || undefined,
         pinned: editingNode?.pinned,
         lastAccessedAt: editingNode?.lastAccessedAt,
         probe: probeResult ?? editingNode?.probe,
@@ -226,6 +293,11 @@ export function PanelDrawer({
     baseUrl: normalizeBaseUrl(baseUrl) || 'https://portal.example.com',
     entrance: normalizeEntrance(entrance),
   });
+
+  const optionalSubtitle =
+    activeCustomFields.length > 0
+      ? `（${activeCustomFields.map((f) => f.label).join(' / ')}）`
+      : '（按空间自定义字段）';
 
   return (
     <AnimatePresence>
@@ -303,7 +375,7 @@ export function PanelDrawer({
             <form
               id={formId}
               onSubmit={handleSubmit}
-              className="flex-1 overflow-y-auto overscroll-contain px-6 py-5 space-y-4"
+              className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-6 py-5 space-y-4"
             >
               <AnimatePresence>
                 {errorMsg && (
@@ -518,6 +590,9 @@ export function PanelDrawer({
                             type="text"
                             spellCheck={false}
                             autoComplete="off"
+                            data-bwignore="true"
+                            data-1p-ignore="true"
+                            data-lpignore="true"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             placeholder="admin"
@@ -531,12 +606,15 @@ export function PanelDrawer({
                           >
                             登录密码
                           </label>
-                          <div className="relative">
+                          <div className="relative overflow-x-clip rounded-lg">
                             <input
                               id={`${formId}-pass`}
                               type={showPassword ? 'text' : 'password'}
                               spellCheck={false}
                               autoComplete="new-password"
+                              data-bwignore="true"
+                              data-1p-ignore="true"
+                              data-lpignore="true"
                               value={password}
                               onChange={(e) => setPassword(e.target.value)}
                               placeholder="登录密码"
@@ -594,16 +672,18 @@ export function PanelDrawer({
                 </AnimatePresence>
               </div>
 
-              <div className="border border-[#E4E4E7] dark:border-[#27272A] rounded-xl overflow-hidden">
+              <div className="border border-[#E4E4E7] dark:border-[#27272A] rounded-xl">
                 <button
                   type="button"
                   aria-expanded={showOptional}
                   onClick={() => setShowOptional((prev) => !prev)}
-                  className="w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-medium text-[#52525B] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white bg-[#FAFAFA] dark:bg-[#16161A] transition-colors"
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-medium text-[#52525B] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white bg-[#FAFAFA] dark:bg-[#16161A] transition-colors ${
+                    showOptional ? 'rounded-t-xl' : 'rounded-xl'
+                  }`}
                 >
-                  <span>可选补充信息（来源 / 地域 / 备注）</span>
+                  <span className="truncate">可选补充信息 {optionalSubtitle}</span>
                   <ChevronDown
-                    className={`w-3.5 h-3.5 transition-transform duration-150 ${
+                    className={`w-3.5 h-3.5 shrink-0 transition-transform duration-150 ${
                       showOptional ? 'rotate-180' : ''
                     }`}
                     aria-hidden="true"
@@ -612,64 +692,131 @@ export function PanelDrawer({
                 <AnimatePresence initial={false}>
                   {showOptional && (
                     <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
+                      initial={{ height: 0, opacity: 0, overflow: 'hidden' }}
+                      animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
+                      exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
                       transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                      className="overflow-hidden border-t border-[#E4E4E7] dark:border-[#27272A]"
+                      className="border-t border-[#E4E4E7] dark:border-[#27272A]"
                     >
                       <div className="p-3.5 space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label
-                              htmlFor={`${formId}-provider`}
-                              className="block text-xs font-medium text-[#27272A] dark:text-[#E4E4E7] mb-1.5"
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
+                            {editingFieldDefs
+                              ? `配置「${workspace.name}」的自定义字段名与展示位置（固定 3 个槽位，留空不启用）`
+                              : `当前空间已启用 ${activeCustomFields.length} 个补充信息字段`}
+                          </span>
+                          {onUpdateWorkspaceFields && activeCustomFields.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDraftFields(normalizeWorkspaceCustomFields(workspace.customFields));
+                                setEditingFieldDefs((v) => !v);
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-[#52525B] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white whitespace-nowrap shrink-0"
                             >
-                              服务商 / 来源
-                            </label>
-                            <input
-                              id={`${formId}-provider`}
-                              type="text"
-                              value={provider}
-                              onChange={(e) => setProvider(e.target.value)}
-                              placeholder="官方 / 内部 / 云服务"
-                              className="w-full h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
-                            />
-                          </div>
-                          <div>
-                            <label
-                              htmlFor={`${formId}-region`}
-                              className="block text-xs font-medium text-[#27272A] dark:text-[#E4E4E7] mb-1.5"
-                            >
-                              所在地域
-                            </label>
-                            <input
-                              id={`${formId}-region`}
-                              type="text"
-                              value={region}
-                              onChange={(e) => setRegion(e.target.value)}
-                              placeholder="华东 / 海外 / 局域网"
-                              className="w-full h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
-                            />
-                          </div>
+                              <SlidersHorizontal className="w-3 h-3" aria-hidden="true" />
+                              <span>{editingFieldDefs ? '返回填写值' : '配置本空间字段'}</span>
+                            </button>
+                          )}
                         </div>
 
-                        <div>
-                          <label
-                            htmlFor={`${formId}-notes`}
-                            className="block text-xs font-medium text-[#27272A] dark:text-[#E4E4E7] mb-1.5"
-                          >
-                            备注说明
-                          </label>
-                          <textarea
-                            id={`${formId}-notes`}
-                            rows={2}
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            placeholder="例如：账号用途、访问方式或补充说明..."
-                            className="w-full px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
-                          />
-                        </div>
+                        {editingFieldDefs ? (
+                          <div className="space-y-2.5">
+                            {draftFields.map((field, idx) => (
+                              <div
+                                key={field.key}
+                                className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center"
+                              >
+                                <div className="sm:col-span-6">
+                                  <label
+                                    htmlFor={`${formId}-def-${field.key}`}
+                                    className="sr-only"
+                                  >
+                                    字段 {idx + 1} 名称
+                                  </label>
+                                  <input
+                                    id={`${formId}-def-${field.key}`}
+                                    type="text"
+                                    value={field.label}
+                                    onChange={(e) =>
+                                      setDraftFields((prev) =>
+                                        prev.map((item) =>
+                                          item.key === field.key
+                                            ? { ...item, label: e.target.value }
+                                            : item
+                                        )
+                                      )
+                                    }
+                                    placeholder={`字段 ${idx + 1}：${SLOT_PLACEHOLDERS[idx] || ''}`}
+                                    className="w-full h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
+                                  />
+                                </div>
+                                <div className="sm:col-span-6">
+                                  <CustomSelect<CustomFieldPlacement>
+                                    ariaLabel={`字段 ${idx + 1} 显示位置`}
+                                    value={field.placement}
+                                    onChange={(placement) =>
+                                      setDraftFields((prev) =>
+                                        prev.map((item) =>
+                                          item.key === field.key ? { ...item, placement } : item
+                                        )
+                                      )
+                                    }
+                                    fullWidth
+                                    size="md"
+                                    align="right"
+                                    options={CUSTOM_FIELD_PLACEMENT_OPTIONS.map((opt) => ({
+                                      value: opt.value,
+                                      label: opt.label,
+                                    }))}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                            {onUpdateWorkspaceFields && (
+                              <div className="flex items-center justify-end gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={handleSaveFieldDefs}
+                                  className="h-8 px-3 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] dark:hover:bg-[#E4E4E7] rounded-lg transition-colors"
+                                >
+                                  保存字段配置并填写
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-2.5">
+                            {activeCustomFields.map((field) => (
+                              <div key={field.key}>
+                                <div className="flex items-center justify-between gap-2 mb-1.5">
+                                  <label
+                                    htmlFor={`${formId}-val-${field.key}`}
+                                    className="text-xs font-medium text-[#27272A] dark:text-[#E4E4E7]"
+                                  >
+                                    {field.label}
+                                  </label>
+                                  <span className="text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
+                                    位置：{placementShortLabel(field.placement)}
+                                  </span>
+                                </div>
+                                <input
+                                  id={`${formId}-val-${field.key}`}
+                                  type="text"
+                                  value={customValues[field.key] || ''}
+                                  onChange={(e) =>
+                                    setCustomValues((prev) => ({
+                                      ...prev,
+                                      [field.key]: e.target.value,
+                                    }))
+                                  }
+                                  placeholder={`填写${field.label}...`}
+                                  className="w-full h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   )}

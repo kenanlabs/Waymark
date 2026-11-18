@@ -721,6 +721,7 @@ export async function syncPublicWorkspace(
       publicRoute: workspace.publicRoute || '',
       publicDomain: workspace.publicDomain || '',
       publicProtocol: workspace.publicProtocol || 'https',
+      customFields: workspace.customFields || [],
       nodes,
     }),
   });

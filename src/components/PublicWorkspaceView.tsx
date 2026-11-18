@@ -14,6 +14,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import type { PublicWorkspaceViewData, ViewMode } from '../types/panel';
 import { copyTextToClipboard } from '../utils/crypto';
+import { resolveNodeCustomEntries } from '../utils/workspacePresets';
 
 interface PublicWorkspaceViewProps {
   loading: boolean;
@@ -81,18 +82,19 @@ export function PublicWorkspaceView({
       .filter((n) => {
         if (selectedGroup !== 'all' && (n.group || '默认分组') !== selectedGroup) return false;
         if (!q) return true;
+        const customMatch = Object.values(n.customValues || {}).some((val) =>
+          (val || '').toLowerCase().includes(q)
+        );
         return (
           n.name.toLowerCase().includes(q) ||
           n.targetUrl.toLowerCase().includes(q) ||
           n.group.toLowerCase().includes(q) ||
-          (n.provider || '').toLowerCase().includes(q) ||
-          (n.region || '').toLowerCase().includes(q) ||
-          (n.notes || '').toLowerCase().includes(q)
+          customMatch
         );
       })
       .sort((a, b) => {
         if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
-        return a.name.localeCompare(b.name, 'zh-CN');
+        return 0;
       });
   }, [workspace, searchQuery, selectedGroup]);
 
@@ -326,8 +328,15 @@ export function PublicWorkspaceView({
                   className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5"
                 >
                   {filteredNodes.map((node, idx) => {
-                    const subtitle = [node.group, node.region || node.provider]
+                    const entries = resolveNodeCustomEntries(node, workspace.customFields);
+                    const topEntries = entries.filter((e) => e.placement === 'card_top');
+                    const bottomEntries = entries.filter((e) => e.placement === 'card_bottom');
+                    const subtitle = [node.group || '默认分组', ...topEntries.map((e) => e.value)]
                       .filter(Boolean)
+                      .join(' · ');
+                    const bottomText = bottomEntries.map((e) => e.value).join(' · ');
+                    const bottomTooltip = bottomEntries
+                      .map((e) => `${e.label}: ${e.value}`)
                       .join(' · ');
                     return (
                       <motion.a
@@ -352,8 +361,18 @@ export function PublicWorkspaceView({
                         <h3 className="mt-1.5 font-display text-[15px] font-semibold text-[#09090B] dark:text-[#FAFAFA] truncate">
                           {node.name}
                         </h3>
-                        <div className="mt-3 font-mono text-[12px] text-[#71717A] dark:text-[#A1A1AA] truncate">
-                          {formatHostDisplay(node.targetUrl)}
+                        <div className="mt-3 flex items-center justify-between gap-2 text-[12px] text-[#71717A] dark:text-[#A1A1AA] min-w-0">
+                          <span className="font-mono truncate">
+                            {formatHostDisplay(node.targetUrl)}
+                          </span>
+                          {bottomText && (
+                            <span
+                              className="text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate max-w-[46%] shrink-0"
+                              title={bottomTooltip}
+                            >
+                              {bottomText}
+                            </span>
+                          )}
                         </div>
                         <span
                           aria-hidden="true"
@@ -379,59 +398,74 @@ export function PublicWorkspaceView({
                       <tr className="border-b border-[#E4E4E7] dark:border-[#27272A] bg-[#FAFAFA] dark:bg-[#141417] text-[12px] font-medium text-[#71717A] dark:text-[#A1A1AA]">
                         <th className="py-3 px-4 w-[28%]">名称与分组</th>
                         <th className="py-3 px-3 w-[38%]">访问地址</th>
-                        <th className="hidden sm:table-cell py-3 px-3 w-[20%]">备注</th>
+                        <th className="hidden sm:table-cell py-3 px-3 w-[20%]">补充信息</th>
                         <th className="py-3 px-4 text-right w-[110px]">操作</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F4F4F5] dark:divide-[#1F1F23]">
-                      {filteredNodes.map((node) => (
-                        <tr
-                          key={node.id}
-                          className="group hover:bg-[#FAFAFA] dark:hover:bg-[#18181B] transition-colors"
-                        >
-                          <td className="py-3 px-4 align-middle min-w-0">
-                            <div className="font-medium text-[13px] text-[#09090B] dark:text-[#FAFAFA] truncate">
-                              {node.name}
-                            </div>
-                            <div className="mt-0.5 text-[11px] text-[#71717A] truncate">
-                              {[node.group, node.provider, node.region].filter(Boolean).join(' · ')}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 align-middle min-w-0">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="font-mono text-xs text-[#27272A] dark:text-[#E4E4E7] truncate">
-                                {node.targetUrl}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyUrl(node.id, node.targetUrl)}
-                                aria-label={`复制 ${node.name} 地址`}
-                                className="p-1 text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white rounded shrink-0"
-                              >
-                                {copiedId === node.id ? (
-                                  <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
-                                ) : (
-                                  <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-                                )}
-                              </button>
-                            </div>
-                          </td>
-                          <td className="hidden sm:table-cell py-3 px-3 align-middle text-xs text-[#71717A] truncate">
-                            {node.notes || '—'}
-                          </td>
-                          <td className="py-3 px-4 align-middle text-right">
-                            <a
-                              href={node.targetUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-md transition-colors whitespace-nowrap"
+                      {filteredNodes.map((node) => {
+                        const entries = resolveNodeCustomEntries(node, workspace.customFields);
+                        const topEntries = entries.filter((e) => e.placement === 'card_top');
+                        const extraEntries = entries.filter(
+                          (e) => e.placement === 'card_bottom' || e.placement === 'detail_only'
+                        );
+                        const extraText = extraEntries
+                          .map((e) => `${e.label}: ${e.value}`)
+                          .join(' · ');
+                        return (
+                          <tr
+                            key={node.id}
+                            className="group hover:bg-[#FAFAFA] dark:hover:bg-[#18181B] transition-colors"
+                          >
+                            <td className="py-3 px-4 align-middle min-w-0">
+                              <div className="font-medium text-[13px] text-[#09090B] dark:text-[#FAFAFA] truncate">
+                                {node.name}
+                              </div>
+                              <div className="mt-0.5 text-[11px] text-[#71717A] truncate">
+                                {[node.group || '默认分组', ...topEntries.map((e) => e.value)]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 align-middle min-w-0">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="font-mono text-xs text-[#27272A] dark:text-[#E4E4E7] truncate">
+                                  {node.targetUrl}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyUrl(node.id, node.targetUrl)}
+                                  aria-label={`复制 ${node.name} 地址`}
+                                  className="p-1 text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white rounded shrink-0"
+                                >
+                                  {copiedId === node.id ? (
+                                    <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+                            <td
+                              className="hidden sm:table-cell py-3 px-3 align-middle text-xs text-[#71717A] truncate"
+                              title={extraText || undefined}
                             >
-                              <span>打开</span>
-                              <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
-                            </a>
-                          </td>
-                        </tr>
-                      ))}
+                              {extraText || '—'}
+                            </td>
+                            <td className="py-3 px-4 align-middle text-right">
+                              <a
+                                href={node.targetUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-md transition-colors whitespace-nowrap"
+                              >
+                                <span>打开</span>
+                                <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
+                              </a>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </motion.div>

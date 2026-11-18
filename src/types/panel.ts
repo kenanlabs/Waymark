@@ -21,12 +21,27 @@ export interface PanelProbeResult {
   checkedAt: string;
 }
 
+export type CustomFieldKey = 'field1' | 'field2' | 'field3';
+
+export type CustomFieldPlacement =
+  | 'card_top'
+  | 'card_bottom'
+  | 'detail_only'
+  | 'drawer_only';
+
+export interface WorkspaceCustomFieldDef {
+  key: CustomFieldKey;
+  label: string;
+  placement: CustomFieldPlacement;
+}
+
 export interface Workspace {
   id: string;
   name: string;
   description?: string;
   panelType?: PanelType;
   groups: string[];
+  customFields?: WorkspaceCustomFieldDef[];
   isPublic?: boolean;
   publicRoute?: string;
   publicDomain?: string;
@@ -40,9 +55,7 @@ export interface PublicNodeItem {
   name: string;
   targetUrl: string;
   group: string;
-  provider?: string;
-  region?: string;
-  notes?: string;
+  customValues?: Partial<Record<CustomFieldKey, string>>;
   pinned?: boolean;
 }
 
@@ -53,6 +66,7 @@ export interface PublicWorkspaceViewData {
   publicRoute: string;
   publicDomain?: string;
   publicProtocol?: 'http' | 'https';
+  customFields?: WorkspaceCustomFieldDef[];
   updatedAt: string;
   nodes: PublicNodeItem[];
 }
@@ -66,13 +80,11 @@ export interface PanelNode {
   username: string;
   password: string;
   group: string;
-  provider: string;
-  region: string;
+  customValues?: Partial<Record<CustomFieldKey, string>>;
   version: PanelVersion;
   autoSubmit: boolean;
   authMode?: AuthMode;
   totpSecret?: string;
-  notes?: string;
   pinned?: boolean;
   lastAccessedAt?: string;
   createdAt: string;
@@ -84,7 +96,7 @@ export type NavSection = 'directory' | 'groups' | 'bridge' | 'security';
 
 export type ViewMode = 'table' | 'grid';
 
-export type SortOption = 'pinned' | 'recent' | 'name' | 'group';
+export type SortOption = 'default' | 'recent' | 'name' | 'group';
 
 export interface BridgeLaunchPayload {
   id: string;

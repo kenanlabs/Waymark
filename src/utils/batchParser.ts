@@ -1,4 +1,4 @@
-import type { PanelNode, PanelVersion } from '../types/panel';
+import type { CustomFieldKey, PanelNode, PanelVersion } from '../types/panel';
 import { generateId } from './crypto';
 import { normalizeBaseUrl, normalizeEntrance, splitFullPanelUrl } from './userscript';
 
@@ -10,8 +10,7 @@ export interface ParsedBatchCandidate {
   username: string;
   password: string;
   group: string;
-  provider: string;
-  region: string;
+  customValues?: Partial<Record<CustomFieldKey, string>>;
   version: PanelVersion;
   valid: boolean;
   error?: string;
@@ -44,6 +43,21 @@ function splitCsvLine(line: string, delimiter: string): string[] {
   return result;
 }
 
+function buildCustomValues(
+  f1?: unknown,
+  f2?: unknown,
+  f3?: unknown
+): Partial<Record<CustomFieldKey, string>> | undefined {
+  const v1 = String(f1 || '').trim();
+  const v2 = String(f2 || '').trim();
+  const v3 = String(f3 || '').trim();
+  const out: Partial<Record<CustomFieldKey, string>> = {};
+  if (v1) out.field1 = v1;
+  if (v2) out.field2 = v2;
+  if (v3) out.field3 = v3;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
   const trimmed = raw.trim();
   if (!trimmed) return [];
@@ -61,6 +75,15 @@ export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
         const name = String(item.name || baseUrl.replace(/^https?:\/\//i, '')).trim();
         const username = String(item.username || item.user || '').trim();
         const password = String(item.password || item.pass || '');
+        const rawCustom =
+          item.customValues && typeof item.customValues === 'object'
+            ? (item.customValues as Record<string, unknown>)
+            : {};
+        const customValues = buildCustomValues(
+          rawCustom.field1 ?? item.field1,
+          rawCustom.field2 ?? item.field2,
+          rawCustom.field3 ?? item.field3
+        );
         const valid = Boolean(baseUrl);
         return {
           lineNumber: idx + 1,
@@ -70,8 +93,7 @@ export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
           username,
           password,
           group: String(item.group || '默认分组').trim(),
-          provider: String(item.provider || '').trim(),
-          region: String(item.region || '').trim(),
+          customValues,
           version: item.version === 'v1' ? 'v1' : 'v2',
           valid,
           error: valid ? undefined : '缺少有效的访问地址',
@@ -99,8 +121,8 @@ export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
 
     if (
       index === 0 &&
-      /^(name|节点|站点|名称)/i.test(cols[0] || '') &&
-      /(url|地址|ip)/i.test(cols[1] || '')
+      /^(workspace|name|节点|站点|名称)/i.test(cols[0] || '') &&
+      /(name|url|地址|ip)/i.test(cols[1] || '')
     ) {
       return;
     }
@@ -111,9 +133,8 @@ export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
     const password = cols[3] || '';
     const explicitEntrance = normalizeEntrance(cols[4] || '');
     const group = (cols[5] || '默认分组').trim();
-    const provider = (cols[6] || '').trim();
-    const region = (cols[7] || '').trim();
-    const version: PanelVersion = cols[8]?.toLowerCase() === 'v1' ? 'v1' : 'v2';
+    const customValues = buildCustomValues(cols[6], cols[7], cols[8]);
+    const version: PanelVersion = 'v2';
 
     const split = splitFullPanelUrl(urlRaw);
     const baseUrl = normalizeBaseUrl(split.baseUrl || urlRaw);
@@ -132,8 +153,7 @@ export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
       username,
       password,
       group,
-      provider,
-      region,
+      customValues,
       version,
       valid: !error,
       error,
@@ -159,8 +179,7 @@ export function candidatesToPanelNodes(
       username: c.username,
       password: c.password,
       group: c.group || '默认分组',
-      provider: c.provider,
-      region: c.region,
+      customValues: c.customValues,
       version: c.version,
       autoSubmit: Boolean(c.username || c.password),
       createdAt: now,

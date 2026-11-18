@@ -1,7 +1,108 @@
-import type { Workspace } from '../types/panel';
+import type {
+  CustomFieldKey,
+  CustomFieldPlacement,
+  PanelNode,
+  PublicNodeItem,
+  Workspace,
+  WorkspaceCustomFieldDef,
+} from '../types/panel';
 
 export const DEFAULT_WORKSPACE_ID = 'ws-default';
 export const DEFAULT_WORKSPACE_GROUPS = ['默认分组'];
+
+export const FIXED_CUSTOM_FIELD_KEYS: CustomFieldKey[] = ['field1', 'field2', 'field3'];
+
+export const DEFAULT_CUSTOM_FIELD_PLACEMENTS: Record<CustomFieldKey, CustomFieldPlacement> = {
+  field1: 'card_top',
+  field2: 'card_bottom',
+  field3: 'detail_only',
+};
+
+export const CUSTOM_FIELD_PLACEMENT_OPTIONS: Array<{
+  value: CustomFieldPlacement;
+  label: string;
+  shortLabel: string;
+}> = [
+  { value: 'card_top', label: '卡片顶部（分组旁）+ 详细视图', shortLabel: '卡片顶部' },
+  { value: 'card_bottom', label: '卡片底部（域名旁）+ 详细视图', shortLabel: '卡片底部' },
+  { value: 'detail_only', label: '仅详细视图显示', shortLabel: '仅详细' },
+  { value: 'drawer_only', label: '仅在编辑抽屉内显示', shortLabel: '仅抽屉' },
+];
+
+export function normalizeWorkspaceCustomFields(
+  fields?: WorkspaceCustomFieldDef[]
+): WorkspaceCustomFieldDef[] {
+  const byKey = new Map<CustomFieldKey, WorkspaceCustomFieldDef>();
+  if (Array.isArray(fields)) {
+    for (const item of fields) {
+      if (
+        item &&
+        (item.key === 'field1' || item.key === 'field2' || item.key === 'field3')
+      ) {
+        const validPlacement: CustomFieldPlacement =
+          item.placement === 'card_top' ||
+          item.placement === 'card_bottom' ||
+          item.placement === 'detail_only' ||
+          item.placement === 'drawer_only'
+            ? item.placement
+            : DEFAULT_CUSTOM_FIELD_PLACEMENTS[item.key];
+        byKey.set(item.key, {
+          key: item.key,
+          label: String(item.label || '').trim(),
+          placement: validPlacement,
+        });
+      }
+    }
+  }
+  return FIXED_CUSTOM_FIELD_KEYS.map((key) => {
+    const existing = byKey.get(key);
+    return (
+      existing ?? {
+        key,
+        label: '',
+        placement: DEFAULT_CUSTOM_FIELD_PLACEMENTS[key],
+      }
+    );
+  });
+}
+
+export function getActiveWorkspaceCustomFields(
+  fields?: WorkspaceCustomFieldDef[]
+): WorkspaceCustomFieldDef[] {
+  return normalizeWorkspaceCustomFields(fields).filter((f) => Boolean(f.label));
+}
+
+export function resolveNodeCustomEntries(
+  node: Pick<PanelNode | PublicNodeItem, 'customValues'>,
+  fields?: WorkspaceCustomFieldDef[]
+): Array<{
+  key: CustomFieldKey;
+  label: string;
+  value: string;
+  placement: CustomFieldPlacement;
+}> {
+  const activeDefs = getActiveWorkspaceCustomFields(fields);
+  const values = node.customValues;
+  if (!values || activeDefs.length === 0) return [];
+  const result: Array<{
+    key: CustomFieldKey;
+    label: string;
+    value: string;
+    placement: CustomFieldPlacement;
+  }> = [];
+  for (const def of activeDefs) {
+    const val = String(values[def.key] || '').trim();
+    if (val) {
+      result.push({
+        key: def.key,
+        label: def.label,
+        value: val,
+        placement: def.placement,
+      });
+    }
+  }
+  return result;
+}
 
 const RESERVED_ROUTE_PREFIXES = [
   '/api',
@@ -24,6 +125,7 @@ export function createDefaultWorkspace(customGroups?: string[]): Workspace {
     name: '默认空间',
     description: '',
     groups: customGroups && customGroups.length > 0 ? customGroups : [...DEFAULT_WORKSPACE_GROUPS],
+    customFields: normalizeWorkspaceCustomFields(),
     isPublic: false,
     publicRoute: '',
     createdAt: now,

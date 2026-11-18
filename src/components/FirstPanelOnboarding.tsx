@@ -128,8 +128,6 @@ export function FirstPanelOnboarding({
         username: autoFill ? username.trim() : '',
         password: autoFill ? password : '',
         group: group.trim() || groupSuggestions[0] || '默认分组',
-        provider: '',
-        region: '',
         version: 'v2',
         autoSubmit: autoFill ? autoSubmit : false,
         probe: probeResult ?? undefined,
@@ -353,6 +351,9 @@ export function FirstPanelOnboarding({
                         type="text"
                         spellCheck={false}
                         autoComplete="off"
+                        data-bwignore="true"
+                        data-1p-ignore="true"
+                        data-lpignore="true"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         placeholder="admin"
@@ -366,12 +367,15 @@ export function FirstPanelOnboarding({
                       >
                         登录密码
                       </label>
-                      <div className="relative">
+                      <div className="relative overflow-x-clip rounded-lg">
                         <input
                           id={`${formId}-pass`}
                           type={showPassword ? 'text' : 'password'}
                           spellCheck={false}
                           autoComplete="new-password"
+                          data-bwignore="true"
+                          data-1p-ignore="true"
+                          data-lpignore="true"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="登录密码"

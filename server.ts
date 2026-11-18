@@ -18,14 +18,21 @@ const STATE_FILE = path.join(DATA_DIR, 'workspace-state.json');
 const SESSION_COOKIE = 'paneldeck_admin_session';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+type CustomFieldKey = 'field1' | 'field2' | 'field3';
+type CustomFieldPlacement = 'card_top' | 'card_bottom' | 'detail_only' | 'drawer_only';
+
+interface WorkspaceCustomFieldDef {
+  key: CustomFieldKey;
+  label: string;
+  placement: CustomFieldPlacement;
+}
+
 interface PublicNodeItem {
   id: string;
   name: string;
   targetUrl: string;
   group: string;
-  provider?: string;
-  region?: string;
-  notes?: string;
+  customValues?: Partial<Record<CustomFieldKey, string>>;
   pinned?: boolean;
 }
 
@@ -36,6 +43,7 @@ interface PublicWorkspaceRecord {
   publicRoute: string;
   publicDomain?: string;
   publicProtocol?: 'http' | 'https';
+  customFields?: WorkspaceCustomFieldDef[];
   updatedAt: string;
   nodes: PublicNodeItem[];
 }
@@ -649,15 +657,14 @@ async function startServer(): Promise<void> {
         publicRoute: match.publicRoute || '',
         publicDomain: match.publicDomain || '',
         publicProtocol: match.publicProtocol || 'https',
+        customFields: Array.isArray(match.customFields) ? match.customFields : [],
         updatedAt: match.updatedAt,
         nodes: match.nodes.map((n) => ({
           id: n.id,
           name: n.name,
           targetUrl: n.targetUrl,
           group: n.group,
-          provider: n.provider || '',
-          region: n.region || '',
-          notes: n.notes || '',
+          customValues: n.customValues || {},
           pinned: Boolean(n.pinned),
         })),
       },
@@ -678,6 +685,7 @@ async function startServer(): Promise<void> {
       publicRoute?: string;
       publicDomain?: string;
       publicProtocol?: string;
+      customFields?: Array<Record<string, unknown>>;
       nodes?: Array<Record<string, unknown>>;
     };
 
@@ -731,6 +739,31 @@ async function startServer(): Promise<void> {
       return;
     }
 
+    // Sanitize fixed custom field definitions (exclude drawer_only fields from public projection)
+    const rawCustomFields = Array.isArray(body?.customFields) ? body.customFields : [];
+    const allowedKeys: CustomFieldKey[] = ['field1', 'field2', 'field3'];
+    const sanitizedCustomFields: WorkspaceCustomFieldDef[] = [];
+    for (const key of allowedKeys) {
+      const found = rawCustomFields.find((f) => f && f.key === key);
+      const label = String(found?.label || '').trim();
+      const placementRaw = String(found?.placement || '');
+      const placement: CustomFieldPlacement =
+        placementRaw === 'card_top' ||
+        placementRaw === 'card_bottom' ||
+        placementRaw === 'detail_only' ||
+        placementRaw === 'drawer_only'
+          ? placementRaw
+          : key === 'field1'
+          ? 'card_top'
+          : key === 'field2'
+          ? 'card_bottom'
+          : 'detail_only';
+      if (label && placement !== 'drawer_only') {
+        sanitizedCustomFields.push({ key, label, placement });
+      }
+    }
+    const publicVisibleKeys = new Set<CustomFieldKey>(sanitizedCustomFields.map((f) => f.key));
+
     // Strict whitelist sanitization: NEVER store usernames, passwords, secrets, or autoSubmit flags
     const rawNodes = Array.isArray(body?.nodes) ? body.nodes : [];
     const sanitizedNodes: PublicNodeItem[] = rawNodes
@@ -738,14 +771,22 @@ async function startServer(): Promise<void> {
         const targetUrl = String(item?.targetUrl || '').trim();
         const nodeName = String(item?.name || '').trim();
         if (!nodeName || !targetUrl) return null;
+        const rawVals =
+          item?.customValues && typeof item.customValues === 'object'
+            ? (item.customValues as Record<string, unknown>)
+            : {};
+        const customValues: Partial<Record<CustomFieldKey, string>> = {};
+        for (const key of allowedKeys) {
+          if (!publicVisibleKeys.has(key)) continue;
+          const v = String(rawVals[key] || '').trim();
+          if (v) customValues[key] = v;
+        }
         return {
           id: String(item?.id || crypto.randomUUID()),
           name: nodeName,
           targetUrl,
           group: String(item?.group || '默认分组').trim() || '默认分组',
-          provider: String(item?.provider || '').trim() || undefined,
-          region: String(item?.region || '').trim() || undefined,
-          notes: String(item?.notes || '').trim() || undefined,
+          customValues: Object.keys(customValues).length > 0 ? customValues : undefined,
           pinned: Boolean(item?.pinned),
         };
       })
@@ -758,6 +799,7 @@ async function startServer(): Promise<void> {
       publicRoute,
       publicDomain: publicDomain || undefined,
       publicProtocol: publicDomain ? publicProtocol : undefined,
+      customFields: sanitizedCustomFields,
       updatedAt: new Date().toISOString(),
       nodes: sanitizedNodes,
     };

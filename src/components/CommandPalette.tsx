@@ -58,14 +58,16 @@ export function CommandPalette({
     return sorted
       .filter((n) => {
         const wsName = workspaceMap.get(n.workspaceId || '')?.name || '';
+        const customMatch = Object.values(n.customValues || {}).some((val) =>
+          (val || '').toLowerCase().includes(q)
+        );
         return (
           n.name.toLowerCase().includes(q) ||
           n.baseUrl.toLowerCase().includes(q) ||
           n.entrance.toLowerCase().includes(q) ||
           n.group.toLowerCase().includes(q) ||
           wsName.toLowerCase().includes(q) ||
-          n.provider.toLowerCase().includes(q) ||
-          n.region.toLowerCase().includes(q)
+          customMatch
         );
       })
       .slice(0, 12);

@@ -115,7 +115,7 @@ export function AdminAuthScreen({ initialized, onAuthenticated }: AdminAuthScree
             >
               管理员密码
             </label>
-            <div className="relative">
+            <div className="relative overflow-x-clip rounded-lg">
               <input
                 id={`${uid}-password`}
                 type={showPass ? 'text' : 'password'}
