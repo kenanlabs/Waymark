@@ -260,7 +260,7 @@ export function WorkspaceModal({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="例如：工作台 / 设计资源 / 团队共享"
-                  className="w-full h-9 px-3 text-[13px] bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                  className="w-full h-9 px-3 text-[13px] bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                 />
               </div>
 
@@ -277,7 +277,7 @@ export function WorkspaceModal({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="简单说明该工作空间的用途..."
-                  className="w-full px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                  className="w-full px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                 />
               </div>
 
@@ -301,7 +301,7 @@ export function WorkspaceModal({
                     aria-checked={isPublic}
                     aria-labelledby={`${uid}-public-label`}
                     onClick={() => setIsPublic((v) => !v)}
-                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 ${
+                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white focus-visible:ring-offset-1 ${
                       isPublic
                         ? 'bg-[#09090B] dark:bg-[#FAFAFA] border-[#09090B] dark:border-[#FAFAFA]'
                         : 'bg-[#E4E4E7] dark:bg-[#27272A] border-[#D4D4D8] dark:border-[#3F3F46]'
@@ -321,11 +321,11 @@ export function WorkspaceModal({
                 <AnimatePresence initial={false}>
                   {isPublic && (
                     <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
+                      initial={{ height: 0, opacity: 0, overflow: 'hidden' }}
+                      animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
+                      exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
                       transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                      className="overflow-hidden space-y-3"
+                      className="space-y-3"
                     >
                       <div>
                         <label
@@ -341,7 +341,7 @@ export function WorkspaceModal({
                           value={publicDomain}
                           onChange={(e) => setPublicDomain(e.target.value)}
                           placeholder="例如：nav.example.com 或 http://nav.lan:3000"
-                          className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                          className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                         />
                         <p className="mt-1 text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
                           将独立域名 DNS 解析到本服务后，访客直接打开该域名即可访问此工作空间
@@ -368,7 +368,7 @@ export function WorkspaceModal({
                               ? '留空则直接通过域名根目录 / 访问'
                               : '/team 或 /share/links'
                           }
-                          className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                          className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                         />
                       </div>
 

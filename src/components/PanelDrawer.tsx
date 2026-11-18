@@ -1,10 +1,7 @@
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import {
   Activity,
-  Bookmark,
-  Check,
   ChevronDown,
-  Copy,
   Eye,
   EyeOff,
   Loader2,
@@ -12,13 +9,11 @@ import {
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { GroupCombobox } from './CustomSelect';
+import { CustomSelect, GroupCombobox } from './CustomSelect';
 import type { PanelNode, PanelProbeResult, Workspace } from '../types/panel';
 import { probePanelNode } from '../utils/auth';
-import { copyTextToClipboard } from '../utils/crypto';
 import {
   buildPanelTargetUrl,
-  buildSingleNodeBookmarklet,
   normalizeBaseUrl,
   normalizeEntrance,
   splitFullPanelUrl,
@@ -65,7 +60,6 @@ export function PanelDrawer({
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<PanelProbeResult | null>(null);
-  const [copiedBookmarklet, setCopiedBookmarklet] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -233,69 +227,6 @@ export function PanelDrawer({
     entrance: normalizeEntrance(entrance),
   });
 
-  const bookmarkletNode = useMemo<PanelNode | null>(() => {
-    if (!autoFill || !username.trim() || authMode === 'basic') return null;
-    const now = new Date().toISOString();
-    return {
-      id: editingNode?.id || 'waymark-bookmarklet',
-      workspaceId: editingNode?.workspaceId ?? workspace.id,
-      name: name.trim() || editingNode?.name || 'Waymark 站点',
-      baseUrl: normalizeBaseUrl(baseUrl),
-      entrance: normalizeEntrance(entrance),
-      username: username.trim(),
-      password,
-      group: group.trim() || '默认分组',
-      provider: provider.trim(),
-      region: region.trim(),
-      version: editingNode?.version ?? 'v2',
-      autoSubmit,
-      authMode,
-      pinned: editingNode?.pinned,
-      lastAccessedAt: editingNode?.lastAccessedAt,
-      createdAt: editingNode?.createdAt || now,
-      updatedAt: now,
-    };
-  }, [
-    autoFill,
-    authMode,
-    username,
-    password,
-    name,
-    baseUrl,
-    entrance,
-    group,
-    provider,
-    region,
-    autoSubmit,
-    editingNode,
-    workspace,
-  ]);
-
-  const bookmarkletHref = bookmarkletNode
-    ? buildSingleNodeBookmarklet(bookmarkletNode)
-    : '';
-
-  const setBookmarkletAnchorRef = useCallback(
-    (el: HTMLAnchorElement | null) => {
-      if (!el) return;
-      if (bookmarkletHref) {
-        el.setAttribute('href', bookmarkletHref);
-      } else {
-        el.removeAttribute('href');
-      }
-    },
-    [bookmarkletHref]
-  );
-
-  const handleCopyBookmarklet = async () => {
-    if (!bookmarkletHref) return;
-    const ok = await copyTextToClipboard(bookmarkletHref);
-    if (ok) {
-      setCopiedBookmarklet(true);
-      window.setTimeout(() => setCopiedBookmarklet(false), 1500);
-    }
-  };
-
   return (
     <AnimatePresence>
       {open && (
@@ -405,7 +336,7 @@ export function PanelDrawer({
                   onChange={(e) => setName(e.target.value)}
                   aria-describedby={errorMsg ? errorId : undefined}
                   placeholder="例如：企业邮箱 / 文档中心 / 项目看板"
-                  className="w-full h-9 px-3 text-[13px] bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                  className="w-full h-9 px-3 text-[13px] bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                 />
               </div>
 
@@ -425,7 +356,7 @@ export function PanelDrawer({
                     onChange={(e) => setBaseUrl(e.target.value)}
                     onBlur={handleUrlBlur}
                     placeholder="https://portal.example.com"
-                    className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                    className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                   />
                 </div>
                 <div>
@@ -442,7 +373,7 @@ export function PanelDrawer({
                     value={entrance}
                     onChange={(e) => setEntrance(e.target.value)}
                     placeholder="/secret 或留空"
-                    className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                    className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                   />
                 </div>
               </div>
@@ -541,11 +472,11 @@ export function PanelDrawer({
                 <AnimatePresence initial={false}>
                   {autoFill && (
                     <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
+                      initial={{ height: 0, opacity: 0, overflow: 'hidden' }}
+                      animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
+                      exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
                       transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                      className="overflow-hidden space-y-3"
+                      className="space-y-3"
                     >
                       <div>
                         <label
@@ -554,21 +485,23 @@ export function PanelDrawer({
                         >
                           认证方式
                         </label>
-                        <select
+                        <CustomSelect<'form' | 'basic'>
                           id={`${formId}-authmode`}
+                          ariaLabel="认证方式"
                           value={authMode}
-                          onChange={(e) =>
-                            setAuthMode(e.target.value === 'basic' ? 'basic' : 'form')
-                          }
-                          className="w-full h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
-                        >
-                          <option value="form">表单自动填充（默认）</option>
-                          <option value="basic">HTTP Basic 认证（Nginx 等）</option>
-                        </select>
-                        <p className="mt-1 text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
+                          onChange={(val) => setAuthMode(val)}
+                          align="left"
+                          fullWidth
+                          size="md"
+                          options={[
+                            { value: 'form', label: '表单自动填充（默认）' },
+                            { value: 'basic', label: 'HTTP Basic 认证（Nginx 等）' },
+                          ]}
+                        />
+                        <p className="mt-1.5 text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
                           {authMode === 'basic'
-                            ? '点击卡片时，Waymark 会把用户名密码写入启动链接，由浏览器完成 HTTP Basic 原生认证；书签脚本无法填充浏览器原生认证弹窗。'
-                            : '已安装 Waymark 浏览器插件或脚本时，打开登录页会自动填充账号密码；若页面仍有未勾选的协议，插件只填充、不自动提交。'}
+                            ? '点击卡片时，Waymark 会将用户名与密码写入启动链接，由浏览器直接完成 HTTP Basic 原生认证。'
+                            : '已安装 Waymark 浏览器插件或油猴脚本时，打开登录页将自动填充账号密码；若存在未勾选协议，仅填充不自动提交。'}
                         </p>
                       </div>
 
@@ -588,7 +521,7 @@ export function PanelDrawer({
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             placeholder="admin"
-                            className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                            className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                           />
                         </div>
                         <div>
@@ -607,7 +540,7 @@ export function PanelDrawer({
                               value={password}
                               onChange={(e) => setPassword(e.target.value)}
                               placeholder="登录密码"
-                              className="w-full h-9 pl-3 pr-9 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                              className="w-full h-9 pl-3 pr-9 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                             />
                             <button
                               type="button"
@@ -633,7 +566,7 @@ export function PanelDrawer({
                             role="switch"
                             aria-checked={autoSubmit}
                             onClick={() => setAutoSubmit((v) => !v)}
-                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 ${
+                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white focus-visible:ring-offset-1 ${
                               autoSubmit
                                 ? 'bg-[#09090B] dark:bg-[#FAFAFA] border-[#09090B] dark:border-[#FAFAFA]'
                                 : 'bg-[#E4E4E7] dark:bg-[#27272A] border-[#D4D4D8] dark:border-[#3F3F46]'
@@ -700,7 +633,7 @@ export function PanelDrawer({
                               value={provider}
                               onChange={(e) => setProvider(e.target.value)}
                               placeholder="官方 / 内部 / 云服务"
-                              className="w-full h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                              className="w-full h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                             />
                           </div>
                           <div>
@@ -716,7 +649,7 @@ export function PanelDrawer({
                               value={region}
                               onChange={(e) => setRegion(e.target.value)}
                               placeholder="华东 / 海外 / 局域网"
-                              className="w-full h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                              className="w-full h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                             />
                           </div>
                         </div>
@@ -734,7 +667,7 @@ export function PanelDrawer({
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             placeholder="例如：账号用途、访问方式或补充说明..."
-                            className="w-full px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                            className="w-full px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                           />
                         </div>
                       </div>
@@ -742,55 +675,6 @@ export function PanelDrawer({
                   )}
                 </AnimatePresence>
               </div>
-
-              {bookmarkletHref && (
-                <div className="pt-3 border-t border-[#E4E4E7] dark:border-[#27272A] flex flex-wrap items-center justify-between gap-2.5">
-                  <div className="text-xs text-[#71717A]">
-                    <span className="block">
-                      无插件备选：拖拽右侧书签到书签栏（或复制代码保存为书签），登录页点击后会填充账号密码；若页面要求勾选协议，脚本不会替你勾选。
-                    </span>
-                    <span className="mt-0.5 block text-[11px] text-[#A1A1AA]">
-                      拖拽无效时：点「复制代码」→ 浏览器书签管理器新建书签 → 将代码粘贴到网址栏。
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <a
-                      ref={setBookmarkletAnchorRef}
-                      onClick={(e) => e.preventDefault()}
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('text/uri-list', bookmarkletHref);
-                        e.dataTransfer.setData('text/plain', bookmarkletHref);
-                      }}
-                      draggable
-                      title="拖拽此按钮到浏览器书签栏"
-                      className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-medium border border-[#E4E4E7] dark:border-[#27272A] rounded-lg bg-[#FAFAFA] dark:bg-[#18181B] text-[#09090B] dark:text-white whitespace-nowrap cursor-grab select-none"
-                    >
-                      <Bookmark className="w-3 h-3" aria-hidden="true" />
-                      <span>填充 · {bookmarkletNode?.name || '当前站点'}</span>
-                    </a>
-                    <button
-                      type="button"
-                      onClick={handleCopyBookmarklet}
-                      title="复制书签脚本代码"
-                      aria-label="复制书签脚本代码"
-                      className="inline-flex items-center gap-1 h-8 px-2.5 text-xs border border-[#E4E4E7] dark:border-[#27272A] rounded-lg bg-white dark:bg-[#111113] hover:bg-[#F4F4F5] dark:hover:bg-[#1F1F23] text-[#52525B] dark:text-[#A1A1AA] transition-colors"
-                    >
-                      {copiedBookmarklet ? (
-                        <Check className="w-3 h-3 text-[#16A34A]" aria-hidden="true" />
-                      ) : (
-                        <Copy className="w-3 h-3" aria-hidden="true" />
-                      )}
-                      <span>{copiedBookmarklet ? '已复制' : '复制代码'}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {authMode === 'basic' && autoFill && username.trim() && (
-                <div className="pt-3 border-t border-[#E4E4E7] dark:border-[#27272A] text-xs text-[#71717A] dark:text-[#A1A1AA]">
-                  已启用 HTTP Basic 认证：点击卡片会打开带凭据的启动链接，浏览器会直接完成原生认证，无需书签脚本。首次使用请确认浏览器地址栏显示的目标站点正确。
-                </div>
-              )}
             </form>
 
             <div className="px-6 py-3.5 border-t border-[#E4E4E7] dark:border-[#27272A] bg-[#FAFAFA] dark:bg-[#0D0D0F] flex items-center justify-between gap-4">

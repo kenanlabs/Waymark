@@ -115,9 +115,7 @@ export function buildBridgeLaunchUrl(node: PanelNode, panelType?: PanelType): st
 }
 
 /**
- * Shared fill runtime used by the browser extension, bookmarklet, and userscript.
- * Intentionally written without comments so it can be compacted into a
- * javascript: URL without breaking.
+ * Shared fill runtime used by the browser extension and userscript.
  */
 export function buildAutoFillCoreSource(): string {
   return String.raw`
@@ -576,16 +574,6 @@ function __wmStartAutoFill(options) {
   }
 }
 `;
-}
-
-export function buildSingleNodeBookmarklet(node: PanelNode): string {
-  const options = JSON.stringify({
-    username: node.username || '',
-    password: node.password || '',
-    autoSubmit: Boolean(node.autoSubmit),
-  });
-  const core = buildAutoFillCoreSource().replace(/\s*\n\s*/g, ' ');
-  return `javascript:(function(){${core}__wmStartAutoFill(${options});})();`;
 }
 
 export function generateUserscriptSource(hubOrigin?: string): string {

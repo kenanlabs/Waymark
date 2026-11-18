@@ -63,7 +63,7 @@ export function VaultLockScreen({ onUnlock }: VaultLockScreenProps) {
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}
               placeholder="输入主密码"
-              className="w-full px-3 py-2 text-sm bg-[#FAFAFA] dark:bg-[#18181B] border border-black/[0.1] dark:border-white/[0.1] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white transition-shadow"
+              className="w-full px-3 py-2 text-sm bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
             />
           </div>
           <AnimatePresence>

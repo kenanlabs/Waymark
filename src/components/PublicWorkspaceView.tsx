@@ -167,7 +167,7 @@ export function PublicWorkspaceView({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索名称、地址或分组..."
-              className="w-full h-8 pl-8 pr-3 text-[13px] bg-[#F4F4F5]/80 dark:bg-[#18181B] border border-transparent focus:border-[#D4D4D8] dark:focus:border-[#3F3F46] focus:bg-white dark:focus:bg-[#111113] rounded-lg transition-all duration-150 focus:outline-none"
+              className="w-full h-8 pl-8 pr-3 text-[13px] bg-[#F4F4F5]/80 dark:bg-[#18181B] border border-transparent focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] focus:bg-white dark:focus:bg-[#111113] rounded-lg transition-all duration-150 focus:outline-none"
             />
           </div>
 

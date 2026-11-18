@@ -152,8 +152,8 @@ export function FirstPanelOnboarding({
       transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
       className="min-h-[58vh] flex flex-col items-center justify-center py-6"
     >
-      <div className="w-full max-w-lg bg-white dark:bg-[#111113] border border-[#E4E4E7] dark:border-[#27272A] rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.05)] dark:shadow-[0_16px_44px_rgba(0,0,0,0.4)] overflow-hidden">
-        <div className="px-6 py-5 border-b border-[#E4E4E7] dark:border-[#27272A] flex items-start gap-3">
+      <div className="w-full max-w-lg bg-white dark:bg-[#111113] border border-[#E4E4E7] dark:border-[#27272A] rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.05)] dark:shadow-[0_16px_44px_rgba(0,0,0,0.4)]">
+        <div className="px-6 py-5 border-b border-[#E4E4E7] dark:border-[#27272A] rounded-t-2xl flex items-start gap-3">
           <div className="w-9 h-9 rounded-xl border border-[#E4E4E7] dark:border-[#27272A] bg-[#FAFAFA] dark:bg-[#18181B] flex items-center justify-center text-[#09090B] dark:text-[#FAFAFA] shrink-0">
             <Server className="w-4 h-4" aria-hidden="true" />
           </div>
@@ -198,7 +198,7 @@ export function FirstPanelOnboarding({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="例如：企业邮箱 / 文档中心 / 设计协作"
-              className="w-full h-9 px-3 text-[13px] bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+              className="w-full h-9 px-3 text-[13px] bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
             />
           </div>
 
@@ -218,7 +218,7 @@ export function FirstPanelOnboarding({
                 onChange={(e) => setBaseUrl(e.target.value)}
                 onBlur={handleUrlBlur}
                 placeholder="https://portal.example.com"
-                className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
               />
             </div>
             <div>
@@ -235,7 +235,7 @@ export function FirstPanelOnboarding({
                 value={entrance}
                 onChange={(e) => setEntrance(e.target.value)}
                 placeholder="/secret 或留空"
-                className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
               />
             </div>
           </div>
@@ -314,7 +314,7 @@ export function FirstPanelOnboarding({
                 aria-checked={autoFill}
                 aria-labelledby={`${formId}-autofill-label`}
                 onClick={() => setAutoFill((v) => !v)}
-                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 ${
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white focus-visible:ring-offset-1 ${
                   autoFill
                     ? 'bg-[#09090B] dark:bg-[#FAFAFA] border-[#09090B] dark:border-[#FAFAFA]'
                     : 'bg-[#E4E4E7] dark:bg-[#27272A] border-[#D4D4D8] dark:border-[#3F3F46]'
@@ -334,11 +334,11 @@ export function FirstPanelOnboarding({
             <AnimatePresence initial={false}>
               {autoFill && (
                 <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
+                  initial={{ height: 0, opacity: 0, overflow: 'hidden' }}
+                  animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
+                  exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                  className="overflow-hidden space-y-3"
+                  className="space-y-3"
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                     <div>
@@ -356,7 +356,7 @@ export function FirstPanelOnboarding({
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         placeholder="admin"
-                        className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                        className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                       />
                     </div>
                     <div>
@@ -375,7 +375,7 @@ export function FirstPanelOnboarding({
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="登录密码"
-                          className="w-full h-9 pl-3 pr-9 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                          className="w-full h-9 pl-3 pr-9 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                         />
                         <button
                           type="button"
@@ -389,15 +389,35 @@ export function FirstPanelOnboarding({
                     </div>
                   </div>
 
-                  <label className="inline-flex items-center gap-2 text-xs text-[#52525B] dark:text-[#A1A1AA] cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={autoSubmit}
-                      onChange={(e) => setAutoSubmit(e.target.checked)}
-                      className="rounded border-[#D4D4D8] text-[#09090B] focus:ring-[#09090B]"
-                    />
-                    <span>填充后自动提交表单（检测到验证码或 MFA 时自动暂停）</span>
-                  </label>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      id={`${formId}-autosubmit`}
+                      type="button"
+                      role="switch"
+                      aria-checked={autoSubmit}
+                      onClick={() => setAutoSubmit((v) => !v)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white focus-visible:ring-offset-1 ${
+                        autoSubmit
+                          ? 'bg-[#09090B] dark:bg-[#FAFAFA] border-[#09090B] dark:border-[#FAFAFA]'
+                          : 'bg-[#E4E4E7] dark:bg-[#27272A] border-[#D4D4D8] dark:border-[#3F3F46]'
+                      }`}
+                    >
+                      <motion.span
+                        layout
+                        transition={{ type: 'spring', stiffness: 540, damping: 34 }}
+                        aria-hidden="true"
+                        className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white dark:bg-[#09090B] shadow-sm ${
+                          autoSubmit ? 'translate-x-[18px]' : 'translate-x-[2px]'
+                        }`}
+                      />
+                    </button>
+                    <label
+                      htmlFor={`${formId}-autosubmit`}
+                      className="text-xs text-[#52525B] dark:text-[#A1A1AA] cursor-pointer select-none"
+                    >
+                      填充后自动提交表单（检测到验证码或 MFA 时自动暂停）
+                    </label>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

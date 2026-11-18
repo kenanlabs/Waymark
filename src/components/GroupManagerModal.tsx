@@ -95,7 +95,7 @@ export function GroupManagerModal({
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="输入新分组名称"
-                  className="flex-1 h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                  className="flex-1 h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                 />
                 <button
                   type="submit"
@@ -139,7 +139,7 @@ export function GroupManagerModal({
                                   setEditValue('');
                                 }
                               }}
-                              className="flex-1 h-7 px-2.5 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#09090B]/40 dark:border-white/40 rounded-md focus:outline-none"
+                              className="flex-1 h-7 px-2.5 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-md focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                             />
                             <button
                               type="submit"

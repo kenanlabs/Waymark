@@ -57,7 +57,7 @@ export function TopBar({
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="搜索名称、地址或分组..."
-            className="w-full h-8 pl-8 pr-11 text-[13px] bg-[#F4F4F5]/80 dark:bg-[#18181B] border border-transparent focus:border-[#D4D4D8] dark:focus:border-[#3F3F46] focus:bg-white dark:focus:bg-[#111113] rounded-lg transition-all duration-150 focus:outline-none"
+            className="w-full h-8 pl-8 pr-11 text-[13px] bg-[#F4F4F5]/80 dark:bg-[#18181B] border border-transparent focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] focus:bg-white dark:focus:bg-[#111113] rounded-lg transition-all duration-150 focus:outline-none"
           />
           <kbd className="hidden sm:inline-block absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] px-1.5 py-0.5 rounded bg-white dark:bg-[#27272A] text-[#71717A] border border-[#E4E4E7] dark:border-[#3F3F46]">
             ⌘K

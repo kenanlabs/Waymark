@@ -832,9 +832,11 @@ async function startServer(): Promise<void> {
     const zipBuffer = getExtensionZipBuffer();
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', 'attachment; filename="waymark-extension.zip"');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-store, no-transform');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Accel-Buffering', 'no');
     res.setHeader('Content-Length', String(zipBuffer.length));
-    res.send(zipBuffer);
+    res.status(200).end(zipBuffer);
   });
 
   // Serve Tampermonkey / Violentmonkey Userscript directly so browsers trigger 1-click install

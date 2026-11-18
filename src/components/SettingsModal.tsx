@@ -6,6 +6,7 @@ import {
   Copy,
   Download,
   KeyRound,
+  Loader2,
   Lock,
   LogOut,
   Puzzle,
@@ -84,6 +85,7 @@ export function SettingsModal({
   const [copiedExtUrl, setCopiedExtUrl] = useState(false);
   const [showScriptCode, setShowScriptCode] = useState(false);
   const [showUserscriptFallback, setShowUserscriptFallback] = useState(false);
+  const [downloadingExt, setDownloadingExt] = useState(false);
 
   // Batch import state
   const [rawText, setRawText] = useState('');
@@ -132,6 +134,31 @@ export function SettingsModal({
     onCopy('扩展管理页地址', 'chrome://extensions');
     setCopiedExtUrl(true);
     window.setTimeout(() => setCopiedExtUrl(false), 1500);
+  };
+
+  const handleDownloadExtension = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    if (downloadingExt) return;
+    setDownloadingExt(true);
+    try {
+      const resp = await fetch('/waymark-extension.zip', { cache: 'no-store' });
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = 'waymark-extension.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch {
+      onNotify('下载插件包失败，请检查网络连接后重试');
+    } finally {
+      setDownloadingExt(false);
+    }
   };
 
   const handleConfirmImport = () => {
@@ -396,7 +423,7 @@ export function SettingsModal({
                               )}
                             </div>
                             <p className="mt-1.5 text-xs text-[#71717A] dark:text-[#A1A1AA] leading-relaxed">
-                              相比油猴脚本，浏览器插件由扩展后台直接探测 HTTP 与内网地址，彻底告别「受限」与授权弹窗；并通过原生页面主环境注入自动填充账号密码，兼容 1Panel、Grafana、Portainer、KubeSphere 等单页后台。
+                              相比油猴脚本，浏览器插件由扩展后台直接探测 HTTP 与内网地址，彻底告别「受限」与授权弹窗；并通过原生页面主环境注入自动填充账号密码，适配各类单页应用后台与表单登录页。
                             </p>
                             {extensionActive &&
                               extensionVersion &&
@@ -412,11 +439,23 @@ export function SettingsModal({
                           <a
                             href="/waymark-extension.zip"
                             download="waymark-extension.zip"
+                            onClick={handleDownloadExtension}
+                            aria-busy={downloadingExt}
                             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] dark:hover:bg-[#E4E4E7] rounded-lg transition-colors whitespace-nowrap shrink-0"
                           >
-                            <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                            {downloadingExt ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                            )}
                             <span>
-                              下载浏览器插件 (.zip · <span className="font-mono tabular-nums">v{EXTENSION_VERSION}</span>)
+                              {downloadingExt ? (
+                                '正在打包下载...'
+                              ) : (
+                                <>
+                                  下载浏览器插件 (.zip · <span className="font-mono tabular-nums">v{EXTENSION_VERSION}</span>)
+                                </>
+                              )}
                             </span>
                           </a>
                           <button
@@ -495,11 +534,11 @@ export function SettingsModal({
                         <AnimatePresence initial={false}>
                           {showUserscriptFallback && (
                             <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
+                              initial={{ height: 0, opacity: 0, overflow: 'hidden' }}
+                              animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
+                              exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
                               transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                              className="overflow-hidden space-y-3"
+                              className="space-y-3"
                             >
                               <p className="text-xs text-[#71717A] dark:text-[#A1A1AA] leading-relaxed">
                                 若不便安装扩展，也可使用 Tampermonkey / Violentmonkey 脚本。注意：新版 Chrome 需在扩展详情页启用「允许运行用户脚本」，且若同时装有插件与脚本，建议停用旧版油猴脚本以避免冲突。
@@ -579,7 +618,7 @@ export function SettingsModal({
                           value={rawText}
                           onChange={(e) => setRawText(e.target.value)}
                           placeholder={FORMAT_GUIDE_PLACEHOLDER}
-                          className="w-full px-3.5 py-2.5 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                          className="w-full px-3.5 py-2.5 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                         />
                       </div>
 
@@ -669,14 +708,14 @@ export function SettingsModal({
                               value={curAdminPass}
                               onChange={(e) => setCurAdminPass(e.target.value)}
                               placeholder="当前管理员密码"
-                              className="px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg"
+                              className="px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                             />
                             <input
                               type="password"
                               value={newAdminPass}
                               onChange={(e) => setNewAdminPass(e.target.value)}
                               placeholder="新管理员密码（至少 6 位）"
-                              className="px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg"
+                              className="px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                             />
                             <button
                               type="submit"
@@ -742,14 +781,14 @@ export function SettingsModal({
                               value={pass1}
                               onChange={(e) => setPass1(e.target.value)}
                               placeholder="设置二次主密码（至少 6 位）"
-                              className="px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg"
+                              className="px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                             />
                             <input
                               type="password"
                               value={pass2}
                               onChange={(e) => setPass2(e.target.value)}
                               placeholder="确认二次主密码"
-                              className="px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg"
+                              className="px-3 py-2 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                             />
                             <button
                               type="submit"
@@ -773,7 +812,7 @@ export function SettingsModal({
                               value={exportPass}
                               onChange={(e) => setExportPass(e.target.value)}
                               placeholder="设置导出加密口令"
-                              className="flex-1 min-w-0 px-3 py-1.5 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg"
+                              className="flex-1 min-w-0 px-3 py-1.5 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                             />
                             <button
                               type="button"
@@ -815,7 +854,7 @@ export function SettingsModal({
                                 value={importPass}
                                 onChange={(e) => setImportPass(e.target.value)}
                                 placeholder="输入解密口令"
-                                className="flex-1 min-w-0 px-3 py-1.5 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg"
+                                className="flex-1 min-w-0 px-3 py-1.5 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                               />
                               <button type="submit" className="px-3 py-1.5 text-xs bg-[#2563EB] text-white rounded-lg">
                                 解密

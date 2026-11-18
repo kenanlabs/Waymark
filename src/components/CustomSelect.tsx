@@ -8,19 +8,25 @@ export interface SelectOption<T extends string = string> {
 }
 
 interface CustomSelectProps<T extends string = string> {
+  id?: string;
   value: T;
   options: Array<SelectOption<T>>;
   onChange: (value: T) => void;
   ariaLabel: string;
   align?: 'left' | 'right';
+  fullWidth?: boolean;
+  size?: 'sm' | 'md';
 }
 
 export function CustomSelect<T extends string = string>({
+  id,
   value,
   options,
   onChange,
   ariaLabel,
   align = 'right',
+  fullWidth = false,
+  size = 'sm',
 }: CustomSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -70,20 +76,30 @@ export function CustomSelect<T extends string = string>({
     }
   };
 
+  const triggerSizeClass =
+    size === 'md'
+      ? 'w-full h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] text-[#09090B] dark:text-[#FAFAFA]'
+      : 'h-8 px-2.5 text-[12px] font-medium bg-white dark:bg-[#111113] text-[#52525B] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white';
+
   return (
-    <div ref={containerRef} className="relative inline-block" onKeyDown={handleKeyDown}>
+    <div
+      ref={containerRef}
+      className={`relative ${fullWidth ? 'block w-full' : 'inline-block'}`}
+      onKeyDown={handleKeyDown}
+    >
       <button
+        id={id}
         type="button"
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         onClick={() => setOpen((prev) => !prev)}
-        className="h-8 inline-flex items-center justify-between gap-2 px-2.5 text-[12px] font-medium text-[#52525B] dark:text-[#A1A1AA] bg-white dark:bg-[#111113] border border-[#E4E4E7] dark:border-[#27272A] hover:border-[#A1A1AA] dark:hover:border-[#3F3F46] hover:text-[#09090B] dark:hover:text-white rounded-lg transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
+        className={`${triggerSizeClass} inline-flex items-center justify-between gap-2 border border-[#E4E4E7] dark:border-[#27272A] hover:border-[#A1A1AA] dark:hover:border-[#3F3F46] rounded-lg transition-[border-color,box-shadow,color] whitespace-nowrap focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA]`}
       >
-        <span>{currentOption?.label}</span>
+        <span className="truncate">{currentOption?.label}</span>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-[#A1A1AA] transition-transform duration-150 ${
+          className={`w-3.5 h-3.5 text-[#A1A1AA] shrink-0 transition-transform duration-150 ${
             open ? 'rotate-180' : ''
           }`}
           aria-hidden="true"
@@ -101,7 +117,9 @@ export function CustomSelect<T extends string = string>({
             exit={{ opacity: 0, y: -4, scale: 0.97 }}
             transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
             style={{ transformOrigin: align === 'right' ? 'top right' : 'top left' }}
-            className={`absolute z-40 mt-1.5 min-w-[144px] py-1 bg-white dark:bg-[#16161A] border border-[#E4E4E7] dark:border-[#27272A] rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.45)] overflow-hidden ${
+            className={`absolute z-50 mt-1.5 ${
+              fullWidth ? 'w-full' : 'min-w-[144px]'
+            } py-1 bg-white dark:bg-[#16161A] border border-[#E4E4E7] dark:border-[#27272A] rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.45)] overflow-hidden ${
               align === 'right' ? 'right-0' : 'left-0'
             }`}
           >
@@ -227,7 +245,7 @@ export function GroupCombobox({
             setActiveIndex(0);
           }}
           placeholder={placeholder}
-          className="w-full h-9 pl-3 pr-8 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+          className="w-full h-9 pl-3 pr-8 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
         />
         <button
           type="button"
