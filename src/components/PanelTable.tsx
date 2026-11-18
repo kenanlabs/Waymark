@@ -62,6 +62,17 @@ function renderProbeStatus(node: PanelNode) {
       </span>
     );
   }
+  if (probe.status === 'blocked') {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-[12px] text-[#D97706] dark:text-[#FBBF24]"
+        title={probe.message}
+      >
+        <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+        <span>受限</span>
+      </span>
+    );
+  }
   return (
     <span
       className="inline-flex items-center gap-1 text-[12px] text-[#DC2626] dark:text-[#F87171]"
@@ -274,7 +285,9 @@ export function PanelTable({
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] dark:hover:bg-[#E4E4E7] rounded-md transition-[background-color,transform] duration-150 active:scale-[0.98] whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white focus-visible:ring-offset-2"
                     >
                       <span>
-                        {!node.username && !node.password
+                        {node.authMode === 'basic'
+                          ? 'Basic 认证'
+                          : !node.username && !node.password
                           ? '打开'
                           : node.autoSubmit
                           ? '一键登录'
@@ -329,7 +342,9 @@ export function PanelTable({
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-[#09090B] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-md whitespace-nowrap shrink-0"
                 >
                   <span>
-                    {!node.username && !node.password
+                    {node.authMode === 'basic'
+                      ? 'Basic 认证'
+                      : !node.username && !node.password
                       ? '打开'
                       : node.autoSubmit
                       ? '一键登录'

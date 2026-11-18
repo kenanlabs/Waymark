@@ -7,6 +7,11 @@ import type {
   ViewMode,
   Workspace,
 } from '../types/panel';
+import {
+  BRIDGE_PROBE_REQUEST_EVENT,
+  BRIDGE_PROBE_RESULT_EVENT,
+  BRIDGE_VERSION,
+} from './userscript';
 
 const ADMIN_TOKEN_KEY = 'paneldeck_admin_token_v1';
 
@@ -177,9 +182,90 @@ export async function probePanelNode(params: {
   const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const controller = new AbortController();
   const timeoutMs = 6000;
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  let timer = 0;
+  const elapsedMs = () =>
+    Math.max(1, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+  const isHttpsPage = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const isLocalTarget =
+    parsed.hostname === 'localhost' ||
+    parsed.hostname === '127.0.0.1' ||
+    parsed.hostname === '[::1]';
+  const bridgeVersion = getBridgeVersion();
+  const bridgeStale =
+    Boolean(bridgeVersion) && !isVersionAtLeast(bridgeVersion, BRIDGE_VERSION);
+  const bridgeNotResponding = '桥接脚本未响应，请在设置中重新安装最新版脚本后重试。';
+  let bridgeUnsupported = false;
+  let bridged: BridgeProbeResponse | null = null;
 
   try {
+    bridged = await probeViaBridge(targetUrl, timeoutMs);
+    if (bridged?.bridged && bridged.result) {
+      const bridgeResult = bridged.result;
+      const latencyMs = elapsedMs();
+      if (!bridgeResult.unsupported) {
+        if (bridgeResult.ok) {
+          const httpStatus = Number(bridgeResult.status) || 0;
+          if (httpStatus === 404) {
+            return {
+              status: 'unreachable',
+              httpStatus: 404,
+              latencyMs,
+              message: `脚本代理检测：返回 404，请核对入口路径是否正确 (${latencyMs} ms)`,
+              checkedAt: new Date().toISOString(),
+            };
+          }
+          if (httpStatus > 0) {
+            return {
+              status: 'reachable',
+              httpStatus,
+              latencyMs,
+              message: `脚本代理检测可达 · HTTP ${httpStatus} (${latencyMs} ms)`,
+              checkedAt: new Date().toISOString(),
+            };
+          }
+          return {
+            status: 'blocked',
+            latencyMs,
+            message: '脚本已收到响应，但无法读取 HTTP 状态码；该站点可能仍在加载，请点击卡片直接打开验证。',
+            checkedAt: new Date().toISOString(),
+          };
+        }
+        if (bridgeResult.error === 'timeout') {
+          return {
+            status: 'unreachable',
+            latencyMs,
+            message: '脚本代理检测超时 (6s)，请检查目标地址或网络连通性。',
+            checkedAt: new Date().toISOString(),
+          };
+        }
+        return {
+          status: 'unreachable',
+          latencyMs,
+          message: `脚本代理检测失败：${bridgeResult.message || bridgeResult.error || '网络错误'}`,
+          checkedAt: new Date().toISOString(),
+        };
+      }
+      bridgeUnsupported = true;
+    }
+
+    if (isHttpsPage && parsed.protocol === 'http:' && !isLocalTarget) {
+      const bridgeHint = bridgeStale
+        ? `检测到旧版脚本 ${bridgeVersion}，请重新安装 ${BRIDGE_VERSION} 后使用脚本代理检测。`
+        : bridgeUnsupported
+          ? '当前脚本未获得跨域请求权限，请在 Tampermonkey 中允许该脚本访问目标域名后重试。'
+          : bridged
+          ? bridgeNotResponding
+          : `安装 Tampermonkey 自动登录脚本后，可由脚本代为完成跨域检测；未安装脚本时请点击卡片直接打开验证。`;
+      return {
+        status: 'blocked',
+        latencyMs: 0,
+        message:
+          `当前为 HTTPS 页面，浏览器禁止直接探测 HTTP 目标（混合内容限制）。${bridgeHint}`,
+        checkedAt: new Date().toISOString(),
+      };
+    }
+
+    timer = window.setTimeout(() => controller.abort(), timeoutMs);
     const resp = await fetch(targetUrl, {
       method: 'GET',
       mode: 'no-cors',
@@ -189,9 +275,7 @@ export async function probePanelNode(params: {
       signal: controller.signal,
     });
 
-    const elapsed =
-      (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt;
-    const latencyMs = Math.max(1, Math.round(elapsed));
+    const latencyMs = elapsedMs();
 
     try {
       await resp.body?.cancel();
@@ -221,13 +305,11 @@ export async function probePanelNode(params: {
     return {
       status: 'reachable',
       latencyMs,
-      message: `客户端直连可达 (${latencyMs} ms)`,
+      message: `客户端直连可达（跨域响应不可读）(${latencyMs} ms)`,
       checkedAt: new Date().toISOString(),
     };
   } catch (err) {
-    const elapsed =
-      (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt;
-    const latencyMs = Math.max(1, Math.round(elapsed));
+    const latencyMs = elapsedMs();
     const isAborted =
       controller.signal.aborted || (err instanceof Error && err.name === 'AbortError');
 
@@ -240,19 +322,33 @@ export async function probePanelNode(params: {
       };
     }
 
-    const isHttpsPage =
-      typeof window !== 'undefined' && window.location.protocol === 'https:';
-    const isLocalHost =
-      parsed.hostname === 'localhost' ||
-      parsed.hostname === '127.0.0.1' ||
-      parsed.hostname === '[::1]';
-
-    if (isHttpsPage && parsed.protocol === 'http:' && !isLocalHost) {
+    if (isHttpsPage && parsed.protocol === 'http:' && !isLocalTarget) {
+      const bridgeHint = bridgeStale
+        ? `检测到旧版脚本 ${bridgeVersion}，请重新安装 ${BRIDGE_VERSION} 后使用脚本代理检测。`
+        : bridgeUnsupported
+          ? '当前脚本未获得跨域请求权限，请在 Tampermonkey 中允许该脚本访问目标域名后重试。'
+          : bridged
+          ? bridgeNotResponding
+          : '安装/更新 Tampermonkey 脚本后可绕过该限制完成检测。';
       return {
-        status: 'unreachable',
+        status: 'blocked',
         latencyMs,
         message:
-          '当前为 HTTPS 页面，受浏览器混合内容限制无法探测 HTTP 目标，请点击卡片直接打开验证',
+          `当前为 HTTPS 页面，受浏览器混合内容限制无法探测 HTTP 目标。${bridgeHint}`,
+        checkedAt: new Date().toISOString(),
+      };
+    }
+
+    if (
+      typeof window !== 'undefined' &&
+      !isPrivateHostname(window.location.hostname) &&
+      isPrivateHostname(parsed.hostname)
+    ) {
+      return {
+        status: 'blocked',
+        latencyMs,
+        message:
+          '目标位于内网/保留地址，浏览器私有网络访问（PNA）策略阻止了当前公网页面直连。请在内网环境访问 Waymark，或安装脚本后由脚本代理检测。',
         checkedAt: new Date().toISOString(),
       };
     }
@@ -274,8 +370,137 @@ export async function probePanelNode(params: {
       checkedAt: new Date().toISOString(),
     };
   } finally {
-    window.clearTimeout(timer);
+    if (timer) window.clearTimeout(timer);
   }
+}
+
+interface BridgeProbeResult {
+  ok?: boolean;
+  status?: number;
+  statusText?: string;
+  finalUrl?: string;
+  error?: string;
+  message?: string;
+  unsupported?: boolean;
+  requestId?: string;
+}
+
+interface BridgeProbeResponse {
+  bridged: boolean;
+  reason?: 'timeout' | 'dispatch_error';
+  result?: BridgeProbeResult;
+}
+
+function parseVersionParts(input: string | null): number[] {
+  return String(input || '')
+    .split('.')
+    .map((part) => Number.parseInt(part, 10) || 0);
+}
+
+function isVersionAtLeast(current: string | null, minimum: string): boolean {
+  if (!current) return false;
+  const a = parseVersionParts(current);
+  const b = parseVersionParts(minimum);
+  const length = Math.max(a.length, b.length);
+  for (let i = 0; i < length; i += 1) {
+    const left = a[i] || 0;
+    const right = b[i] || 0;
+    if (left > right) return true;
+    if (left < right) return false;
+  }
+  return true;
+}
+
+function getBridgeVersion(): string | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    return document.documentElement.getAttribute('data-paneldeck-bridge');
+  } catch {
+    return null;
+  }
+}
+
+function isPrivateHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) return false;
+  if (
+    host === 'localhost' ||
+    host === '::1' ||
+    host === '0.0.0.0' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    host.endsWith('.internal')
+  ) {
+    return true;
+  }
+  if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)) return true;
+  if (/^169\.254\./.test(host) || /^100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\./.test(host)) return true;
+  const private172 = host.match(/^172\.(\d{1,3})\./);
+  if (private172) {
+    const second = Number(private172[1]);
+    if (second >= 16 && second <= 31) return true;
+  }
+  if (/^(fc|fd|fe80):/i.test(host)) return true;
+  return false;
+}
+
+function probeViaBridge(url: string, timeoutMs: number): Promise<BridgeProbeResponse | null> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return Promise.resolve(null);
+  }
+  const version = getBridgeVersion();
+  if (!version || !isVersionAtLeast(version, BRIDGE_VERSION)) {
+    return Promise.resolve(null);
+  }
+
+  const requestId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `wm-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  return new Promise<BridgeProbeResponse>((resolve) => {
+    let settled = false;
+    let timer = 0;
+
+    const cleanup = () => {
+      window.removeEventListener(BRIDGE_PROBE_RESULT_EVENT, onResult as EventListener);
+      if (timer) window.clearTimeout(timer);
+    };
+
+    const finish = (response: BridgeProbeResponse) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(response);
+    };
+
+    const onResult = (event: Event) => {
+      try {
+        const detail = (event as CustomEvent).detail;
+        const parsedDetail = typeof detail === 'string' ? JSON.parse(detail) : detail;
+        if (!parsedDetail || parsedDetail.requestId !== requestId) return;
+        finish({ bridged: true, result: parsedDetail as BridgeProbeResult });
+      } catch {
+        // Ignore malformed bridge responses
+      }
+    };
+
+    timer = window.setTimeout(
+      () => finish({ bridged: false, reason: 'timeout' }),
+      timeoutMs + 2000
+    );
+    window.addEventListener(BRIDGE_PROBE_RESULT_EVENT, onResult as EventListener);
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent(BRIDGE_PROBE_REQUEST_EVENT, {
+          detail: JSON.stringify({ requestId, url, timeoutMs }),
+        })
+      );
+    } catch {
+      finish({ bridged: false, reason: 'dispatch_error' });
+    }
+  });
 }
 
 export async function fetchPublicWorkspaceByRoute(

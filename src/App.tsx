@@ -150,6 +150,7 @@ export default function App() {
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('bridge');
   const [commandOpen, setCommandOpen] = useState(false);
   const [bridgeActive, setBridgeActive] = useState(false);
+  const [bridgeVersion, setBridgeVersion] = useState<string | null>(null);
   const [batchProbing, setBatchProbing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -266,9 +267,9 @@ export default function App() {
   useEffect(() => {
     if (publicMode !== 'admin') return;
     const checkBridge = () => {
-      if (document.documentElement.getAttribute('data-paneldeck-bridge')) {
-        setBridgeActive(true);
-      }
+      const version = document.documentElement.getAttribute('data-paneldeck-bridge');
+      setBridgeVersion(version);
+      setBridgeActive(Boolean(version));
     };
     checkBridge();
     window.addEventListener('paneldeck-bridge-ready', checkBridge);
@@ -1004,6 +1005,7 @@ export default function App() {
       password: node.password,
       version: node.version,
       autoSubmit: node.autoSubmit,
+      authMode: node.authMode === 'basic' ? 'basic' : 'form',
       ts: Date.now(),
     };
     window.dispatchEvent(
@@ -1510,6 +1512,7 @@ export default function App() {
         workspaces={workspaces}
         activeWorkspace={activeWorkspace}
         bridgeActive={bridgeActive}
+        bridgeVersion={bridgeVersion}
         hasMasterLock={Boolean(masterPassphrase)}
         adminUsername={authStatus.username}
         envManaged={authStatus.envManaged}

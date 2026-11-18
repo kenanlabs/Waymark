@@ -2,7 +2,16 @@ export type PanelVersion = 'v1' | 'v2';
 
 export type PanelType = '1panel' | 'grafana' | 'kubesphere' | 'portainer' | 'proxmox' | 'custom';
 
-export type ProbeStatus = 'untested' | 'checking' | 'reachable' | 'auth_ok' | 'auth_failed' | 'unreachable';
+export type AuthMode = 'form' | 'basic';
+
+export type ProbeStatus =
+  | 'untested'
+  | 'checking'
+  | 'reachable'
+  | 'auth_ok'
+  | 'auth_failed'
+  | 'blocked'
+  | 'unreachable';
 
 export interface PanelProbeResult {
   status: ProbeStatus;
@@ -61,6 +70,7 @@ export interface PanelNode {
   region: string;
   version: PanelVersion;
   autoSubmit: boolean;
+  authMode?: AuthMode;
   totpSecret?: string;
   notes?: string;
   pinned?: boolean;
@@ -87,6 +97,7 @@ export interface BridgeLaunchPayload {
   password: string;
   version: PanelVersion;
   autoSubmit: boolean;
+  authMode?: AuthMode;
   ts: number;
 }
 

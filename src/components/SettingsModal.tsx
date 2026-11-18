@@ -20,7 +20,7 @@ import type { EncryptedVaultEnvelope, PanelNode, Workspace } from '../types/pane
 import { changeAdminPassword } from '../utils/auth';
 import { candidatesToPanelNodes, parseBatchInput } from '../utils/batchParser';
 import { decryptVaultBundle, encryptVaultNodes } from '../utils/crypto';
-import { generateUserscriptSource } from '../utils/userscript';
+import { BRIDGE_VERSION, generateUserscriptSource } from '../utils/userscript';
 
 export type SettingsTab = 'bridge' | 'import' | 'security';
 
@@ -31,6 +31,7 @@ interface SettingsModalProps {
   workspaces: Workspace[];
   activeWorkspace: Workspace;
   bridgeActive: boolean;
+  bridgeVersion?: string | null;
   hasMasterLock: boolean;
   adminUsername?: string;
   envManaged?: boolean;
@@ -56,6 +57,7 @@ export function SettingsModal({
   workspaces,
   activeWorkspace,
   bridgeActive,
+  bridgeVersion,
   hasMasterLock,
   adminUsername,
   envManaged,
@@ -367,13 +369,21 @@ export function SettingsModal({
                             )}
                             <span className="text-sm font-medium text-[#09090B] dark:text-[#FAFAFA]">
                               {bridgeActive
-                                ? '已检测到桥接脚本，跳转时将自动填充并登录'
+                                ? `已检测到桥接脚本${bridgeVersion ? ` v${bridgeVersion}` : ''}，跳转时将自动填充并登录`
                                 : '安装一次 Tampermonkey 脚本，实现跨域名自动免密登录'}
                             </span>
                           </div>
                           <p className="mt-1.5 text-xs text-[#71717A] dark:text-[#A1A1AA] leading-relaxed">
-                            点击卡片跳转时，凭据通过 URL Hash 与扩展一次性存储传递（页面加载后立即清理地址栏并销毁暂存），兼容常见 Web 管理后台、监控平台与自建服务。
+                            点击卡片跳转时，凭据通过 URL Hash 与扩展一次性存储传递（页面加载后立即清理地址栏并销毁暂存）。脚本还会代为完成跨域连通性检测，兼容 1Panel、Grafana、Portainer、KubeSphere 等常见后台；Nginx HTTP Basic 认证请在站点编辑中选择「HTTP Basic 认证」。
+                            首次检测若弹出跨域授权提示，请选择「始终允许」。
                           </p>
+                          {bridgeActive &&
+                            bridgeVersion &&
+                            bridgeVersion !== BRIDGE_VERSION && (
+                              <p className="mt-2 text-xs text-[#B45309] dark:text-[#FCD34D]">
+                                当前脚本版本 {bridgeVersion} 较旧，请点击下方「一键安装脚本」重新安装 v{BRIDGE_VERSION}，以启用跨域连通性检测与通用登录填充。
+                              </p>
+                            )}
                         </div>
                       </div>
 

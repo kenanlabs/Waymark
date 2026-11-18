@@ -50,6 +50,7 @@ export function PanelDrawer({
   const [baseUrl, setBaseUrl] = useState('');
   const [entrance, setEntrance] = useState('');
   const [autoFill, setAutoFill] = useState(false);
+  const [authMode, setAuthMode] = useState<'form' | 'basic'>('form');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [autoSubmit, setAutoSubmit] = useState(true);
@@ -80,6 +81,7 @@ export function PanelDrawer({
       setBaseUrl(editingNode.baseUrl);
       setEntrance(editingNode.entrance);
       setAutoFill(hasCreds);
+      setAuthMode(editingNode.authMode === 'basic' ? 'basic' : 'form');
       setUsername(editingNode.username);
       setPassword(editingNode.password);
       setAutoSubmit(editingNode.autoSubmit);
@@ -93,6 +95,7 @@ export function PanelDrawer({
       setBaseUrl('');
       setEntrance('');
       setAutoFill(false);
+      setAuthMode('form');
       setUsername('');
       setPassword('');
       setAutoSubmit(true);
@@ -115,6 +118,7 @@ export function PanelDrawer({
       baseUrl !== editingNode.baseUrl ||
       entrance !== editingNode.entrance ||
       autoFill !== origHasCreds ||
+      authMode !== (editingNode.authMode === 'basic' ? 'basic' : 'form') ||
       username !== editingNode.username ||
       password !== editingNode.password ||
       group !== (editingNode.group || '默认分组') ||
@@ -130,6 +134,7 @@ export function PanelDrawer({
     baseUrl,
     entrance,
     autoFill,
+    authMode,
     username,
     password,
     group,
@@ -208,11 +213,12 @@ export function PanelDrawer({
         entrance: normalizeEntrance(entrance),
         username: autoFill ? username.trim() : '',
         password: autoFill ? password : '',
+        authMode,
         group: group.trim() || '默认分组',
         provider: provider.trim(),
         region: region.trim(),
         version: editingNode?.version ?? 'v2',
-        autoSubmit: autoFill ? autoSubmit : false,
+        autoSubmit: autoFill && authMode === 'form' ? autoSubmit : false,
         notes: notes.trim() || undefined,
         pinned: editingNode?.pinned,
         lastAccessedAt: editingNode?.lastAccessedAt,
@@ -227,10 +233,47 @@ export function PanelDrawer({
     entrance: normalizeEntrance(entrance),
   });
 
-  const bookmarkletHref =
-    editingNode && (editingNode.username || editingNode.password)
-      ? buildSingleNodeBookmarklet(editingNode)
-      : '';
+  const bookmarkletNode = useMemo<PanelNode | null>(() => {
+    if (!autoFill || !username.trim() || authMode === 'basic') return null;
+    const now = new Date().toISOString();
+    return {
+      id: editingNode?.id || 'waymark-bookmarklet',
+      workspaceId: editingNode?.workspaceId ?? workspace.id,
+      name: name.trim() || editingNode?.name || 'Waymark 站点',
+      baseUrl: normalizeBaseUrl(baseUrl),
+      entrance: normalizeEntrance(entrance),
+      username: username.trim(),
+      password,
+      group: group.trim() || '默认分组',
+      provider: provider.trim(),
+      region: region.trim(),
+      version: editingNode?.version ?? 'v2',
+      autoSubmit,
+      authMode,
+      pinned: editingNode?.pinned,
+      lastAccessedAt: editingNode?.lastAccessedAt,
+      createdAt: editingNode?.createdAt || now,
+      updatedAt: now,
+    };
+  }, [
+    autoFill,
+    authMode,
+    username,
+    password,
+    name,
+    baseUrl,
+    entrance,
+    group,
+    provider,
+    region,
+    autoSubmit,
+    editingNode,
+    workspace,
+  ]);
+
+  const bookmarkletHref = bookmarkletNode
+    ? buildSingleNodeBookmarklet(bookmarkletNode)
+    : '';
 
   const setBookmarkletAnchorRef = useCallback(
     (el: HTMLAnchorElement | null) => {
@@ -504,6 +547,31 @@ export function PanelDrawer({
                       transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                       className="overflow-hidden space-y-3"
                     >
+                      <div>
+                        <label
+                          htmlFor={`${formId}-authmode`}
+                          className="block text-xs font-medium text-[#27272A] dark:text-[#E4E4E7] mb-1.5"
+                        >
+                          认证方式
+                        </label>
+                        <select
+                          id={`${formId}-authmode`}
+                          value={authMode}
+                          onChange={(e) =>
+                            setAuthMode(e.target.value === 'basic' ? 'basic' : 'form')
+                          }
+                          className="w-full h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
+                        >
+                          <option value="form">表单自动填充（默认）</option>
+                          <option value="basic">HTTP Basic 认证（Nginx 等）</option>
+                        </select>
+                        <p className="mt-1 text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
+                          {authMode === 'basic'
+                            ? '点击卡片时，Waymark 会把用户名密码写入启动链接，由浏览器完成 HTTP Basic 原生认证；书签脚本无法填充浏览器原生认证弹窗。'
+                            : '脚本会在登录页查找用户名与密码输入框并填充；若页面仍有未勾选的协议，脚本只填充、不自动提交。'}
+                        </p>
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                         <div>
                           <label
@@ -557,35 +625,37 @@ export function PanelDrawer({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2.5">
-                        <button
-                          id={`${formId}-autosubmit`}
-                          type="button"
-                          role="switch"
-                          aria-checked={autoSubmit}
-                          onClick={() => setAutoSubmit((v) => !v)}
-                          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 ${
-                            autoSubmit
-                              ? 'bg-[#09090B] dark:bg-[#FAFAFA] border-[#09090B] dark:border-[#FAFAFA]'
-                              : 'bg-[#E4E4E7] dark:bg-[#27272A] border-[#D4D4D8] dark:border-[#3F3F46]'
-                          }`}
-                        >
-                          <motion.span
-                            layout
-                            transition={{ type: 'spring', stiffness: 540, damping: 34 }}
-                            aria-hidden="true"
-                            className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white dark:bg-[#09090B] shadow-sm ${
-                              autoSubmit ? 'translate-x-[18px]' : 'translate-x-[2px]'
+                      {authMode === 'form' && (
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            id={`${formId}-autosubmit`}
+                            type="button"
+                            role="switch"
+                            aria-checked={autoSubmit}
+                            onClick={() => setAutoSubmit((v) => !v)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 ${
+                              autoSubmit
+                                ? 'bg-[#09090B] dark:bg-[#FAFAFA] border-[#09090B] dark:border-[#FAFAFA]'
+                                : 'bg-[#E4E4E7] dark:bg-[#27272A] border-[#D4D4D8] dark:border-[#3F3F46]'
                             }`}
-                          />
-                        </button>
-                        <label
-                          htmlFor={`${formId}-autosubmit`}
-                          className="text-xs text-[#27272A] dark:text-[#E4E4E7] cursor-pointer select-none"
-                        >
-                          填充后自动提交（遇验证码暂停）
-                        </label>
-                      </div>
+                          >
+                            <motion.span
+                              layout
+                              transition={{ type: 'spring', stiffness: 540, damping: 34 }}
+                              aria-hidden="true"
+                              className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white dark:bg-[#09090B] shadow-sm ${
+                                autoSubmit ? 'translate-x-[18px]' : 'translate-x-[2px]'
+                              }`}
+                            />
+                          </button>
+                          <label
+                            htmlFor={`${formId}-autosubmit`}
+                            className="text-xs text-[#27272A] dark:text-[#E4E4E7] cursor-pointer select-none"
+                          >
+                            填充后自动提交（遇验证码暂停）
+                          </label>
+                        </div>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -673,10 +743,15 @@ export function PanelDrawer({
                 </AnimatePresence>
               </div>
 
-              {editingNode && bookmarkletHref && (
+              {bookmarkletHref && (
                 <div className="pt-3 border-t border-[#E4E4E7] dark:border-[#27272A] flex flex-wrap items-center justify-between gap-2.5">
                   <div className="text-xs text-[#71717A]">
-                    无插件备选：拖拽右侧书签到书签栏（或复制代码保存为书签），登录页点击即可填充
+                    <span className="block">
+                      无插件备选：拖拽右侧书签到书签栏（或复制代码保存为书签），登录页点击后会填充账号密码；若页面要求勾选协议，脚本不会替你勾选。
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-[#A1A1AA]">
+                      拖拽无效时：点「复制代码」→ 浏览器书签管理器新建书签 → 将代码粘贴到网址栏。
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <a
@@ -691,7 +766,7 @@ export function PanelDrawer({
                       className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-medium border border-[#E4E4E7] dark:border-[#27272A] rounded-lg bg-[#FAFAFA] dark:bg-[#18181B] text-[#09090B] dark:text-white whitespace-nowrap cursor-grab select-none"
                     >
                       <Bookmark className="w-3 h-3" aria-hidden="true" />
-                      <span>填充 · {editingNode.name}</span>
+                      <span>填充 · {bookmarkletNode?.name || '当前站点'}</span>
                     </a>
                     <button
                       type="button"
@@ -708,6 +783,12 @@ export function PanelDrawer({
                       <span>{copiedBookmarklet ? '已复制' : '复制代码'}</span>
                     </button>
                   </div>
+                </div>
+              )}
+
+              {authMode === 'basic' && autoFill && username.trim() && (
+                <div className="pt-3 border-t border-[#E4E4E7] dark:border-[#27272A] text-xs text-[#71717A] dark:text-[#A1A1AA]">
+                  已启用 HTTP Basic 认证：点击卡片会打开带凭据的启动链接，浏览器会直接完成原生认证，无需书签脚本。首次使用请确认浏览器地址栏显示的目标站点正确。
                 </div>
               )}
             </form>
