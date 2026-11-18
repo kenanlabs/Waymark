@@ -688,7 +688,7 @@ export function SettingsModal({
 
                       {/* Clear */}
                       <div className="pt-4 border-t border-[#E4E4E7] dark:border-[#27272A] flex items-center justify-between">
-                        <span className="text-xs text-[#71717A]">清空本地存储的所有站点记录</span>
+                        <span className="text-xs text-[#71717A]">清空已保存的全部站点记录</span>
                         {confirmClear ? (
                           <div className="flex items-center gap-2">
                             <button

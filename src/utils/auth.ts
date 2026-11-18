@@ -199,3 +199,53 @@ export async function removePublicWorkspace(workspaceId: string): Promise<void> 
     headers: getAdminHeaders(),
   }).catch(() => undefined);
 }
+
+export interface PersistedWorkspaceState {
+  activeWorkspaceId?: string;
+  workspaces: Workspace[];
+  nodes: import('../types/panel').PanelNode[];
+  updatedAt?: string;
+}
+
+export async function fetchAdminState(): Promise<{
+  ok: boolean;
+  hasSavedState: boolean;
+  state?: PersistedWorkspaceState | null;
+  unauthorized?: boolean;
+}> {
+  const resp = await fetch('/api/admin/state', {
+    credentials: 'include',
+    headers: getAdminHeaders(),
+  });
+  if (resp.status === 401) {
+    return { ok: false, hasSavedState: false, unauthorized: true };
+  }
+  if (!resp.ok) {
+    return { ok: false, hasSavedState: false };
+  }
+  return (await resp.json()) as {
+    ok: boolean;
+    hasSavedState: boolean;
+    state?: PersistedWorkspaceState | null;
+  };
+}
+
+export async function saveAdminState(payload: {
+  activeWorkspaceId?: string;
+  workspaces: Workspace[];
+  nodes: import('../types/panel').PanelNode[];
+}): Promise<{ ok: boolean; unauthorized?: boolean; message?: string }> {
+  const resp = await fetch('/api/admin/state', {
+    method: 'PUT',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAdminHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (resp.status === 401) {
+    return { ok: false, unauthorized: true };
+  }
+  return (await resp.json()) as { ok: boolean; message?: string };
+}

@@ -13,6 +13,7 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const ADMIN_FILE = path.join(DATA_DIR, 'admin.json');
 const PUBLIC_WORKSPACES_FILE = path.join(DATA_DIR, 'public-workspaces.json');
+const STATE_FILE = path.join(DATA_DIR, 'workspace-state.json');
 const SESSION_COOKIE = 'paneldeck_admin_session';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -55,8 +56,17 @@ interface SessionPayload {
   exp: number;
 }
 
+interface ServerWorkspaceState {
+  version: 1;
+  activeWorkspaceId?: string;
+  workspaces: Array<Record<string, unknown>>;
+  nodes: Array<Record<string, unknown>>;
+  updatedAt: string;
+}
+
 let inMemoryAdmin: StoredAdminConfig | null = null;
 let inMemoryPublicWorkspaces: Record<string, PublicWorkspaceRecord> | null = null;
+let inMemoryWorkspaceState: ServerWorkspaceState | null = null;
 const envFallbackSecret = process.env.SESSION_SECRET?.trim() || crypto.randomBytes(32).toString('hex');
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
@@ -145,6 +155,40 @@ function writePublicWorkspaces(data: Record<string, PublicWorkspaceRecord>): voi
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(PUBLIC_WORKSPACES_FILE, JSON.stringify(data, null, 2), { mode: 0o600 });
+  } catch {
+    // Keep in-memory state if filesystem is read-only
+  }
+}
+
+function readServerWorkspaceState(): ServerWorkspaceState | null {
+  if (inMemoryWorkspaceState) return inMemoryWorkspaceState;
+  try {
+    if (!fs.existsSync(STATE_FILE)) return null;
+    const raw = fs.readFileSync(STATE_FILE, 'utf8');
+    const parsed = JSON.parse(raw) as Partial<ServerWorkspaceState>;
+    if (parsed && Array.isArray(parsed.workspaces) && Array.isArray(parsed.nodes)) {
+      const normalized: ServerWorkspaceState = {
+        version: 1,
+        activeWorkspaceId:
+          typeof parsed.activeWorkspaceId === 'string' ? parsed.activeWorkspaceId : undefined,
+        workspaces: parsed.workspaces,
+        nodes: parsed.nodes,
+        updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date().toISOString(),
+      };
+      inMemoryWorkspaceState = normalized;
+      return normalized;
+    }
+  } catch {
+    // Ignore malformed file
+  }
+  return null;
+}
+
+function writeServerWorkspaceState(state: ServerWorkspaceState): void {
+  inMemoryWorkspaceState = state;
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), { mode: 0o600 });
   } catch {
     // Keep in-memory state if filesystem is read-only
   }
@@ -360,7 +404,7 @@ function isLikelyPrivateLanIp(hostname: string): boolean {
 
 async function startServer(): Promise<void> {
   const app = express();
-  app.use(express.json({ limit: '256kb' }));
+  app.use(express.json({ limit: '2mb' }));
 
   // Admin auth status
   app.get('/api/auth/status', (req, res) => {
@@ -731,6 +775,49 @@ async function startServer(): Promise<void> {
       }
     }
     res.json({ ok: true });
+  });
+
+  // Admin: read persisted workspaces & nodes (cross-domain / cross-device sync)
+  app.get('/api/admin/state', requireAdmin, (_req, res) => {
+    const state = readServerWorkspaceState();
+    res.json({
+      ok: true,
+      hasSavedState: Boolean(state),
+      state,
+    });
+  });
+
+  // Admin: persist full workspaces & nodes snapshot
+  app.put('/api/admin/state', requireAdmin, (req, res) => {
+    const body = req.body as {
+      activeWorkspaceId?: string;
+      workspaces?: unknown;
+      nodes?: unknown;
+    };
+
+    if (!Array.isArray(body?.workspaces) || body.workspaces.length === 0) {
+      res.status(400).json({ ok: false, message: '工作空间列表不能为空' });
+      return;
+    }
+    if (!Array.isArray(body?.nodes)) {
+      res.status(400).json({ ok: false, message: '站点列表格式无效' });
+      return;
+    }
+
+    const updatedAt = new Date().toISOString();
+    const nextState: ServerWorkspaceState = {
+      version: 1,
+      activeWorkspaceId:
+        typeof body.activeWorkspaceId === 'string' && body.activeWorkspaceId.trim()
+          ? body.activeWorkspaceId.trim()
+          : undefined,
+      workspaces: body.workspaces as Array<Record<string, unknown>>,
+      nodes: body.nodes as Array<Record<string, unknown>>,
+      updatedAt,
+    };
+
+    writeServerWorkspaceState(nextState);
+    res.json({ ok: true, updatedAt });
   });
 
   // Serve Tampermonkey / Violentmonkey Userscript directly so browsers trigger 1-click install

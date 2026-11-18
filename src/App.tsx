@@ -25,11 +25,13 @@ import type {
   Workspace,
 } from './types/panel';
 import {
+  fetchAdminState,
   fetchAuthStatus,
   fetchPublicWorkspaceByRoute,
   logoutAdminAccount,
   probePanelNode,
   removePublicWorkspace,
+  saveAdminState,
   syncPublicWorkspace,
   type AdminAuthStatus,
 } from './utils/auth';
@@ -118,9 +120,12 @@ export default function App() {
 
   const [nodes, setNodes] = useState<PanelNode[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [serverStateLoaded, setServerStateLoaded] = useState(false);
   const [lockedEnvelope, setLockedEnvelope] = useState<EncryptedVaultEnvelope | null>(null);
   const [masterPassphrase, setMasterPassphrase] = useState<string | null>(null);
   const lastSyncedPublicRef = useRef<Record<string, string>>({});
+  const lastSavedServerSigRef = useRef<string>('');
+  const pendingMigrationToastRef = useRef(false);
 
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [sortBy, setSortBy] = useState<SortOption>('pinned');
@@ -175,14 +180,14 @@ export default function App() {
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
-  // Persist workspaces config (admin mode only)
+  // Persist workspaces config to local cache (admin mode only, after server state loaded)
   useEffect(() => {
-    if (publicMode !== 'admin') return;
+    if (publicMode !== 'admin' || !serverStateLoaded) return;
     localStorage.setItem(
       WORKSPACES_STORAGE_KEY,
       JSON.stringify({ activeWorkspaceId, workspaces })
     );
-  }, [publicMode, activeWorkspaceId, workspaces]);
+  }, [publicMode, serverStateLoaded, activeWorkspaceId, workspaces]);
 
   // Isolated public entry check (checks preview query, custom Host domain, and custom route path before any admin logic)
   useEffect(() => {
@@ -281,7 +286,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [publicMode, authStatus.authenticated, commandOpen, drawerOpen, settingsOpen, groupManagerOpen, workspaceModalOpen]);
 
-  // Initial load from localStorage (admin mode only — never accessed in public route mode)
+  // Initial load from localStorage (admin mode only — used as local cache or migration source)
   useEffect(() => {
     if (publicMode !== 'admin') return;
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -312,6 +317,169 @@ export default function App() {
       setHydrated(true);
     }
   }, [publicMode]);
+
+  // Load authoritative workspace & node state from server after admin authentication
+  useEffect(() => {
+    if (publicMode !== 'admin' || !hydrated || !authChecked || !authStatus.authenticated) return;
+    if (serverStateLoaded) return;
+
+    let cancelled = false;
+    fetchAdminState()
+      .then((res) => {
+        if (cancelled) return;
+        if (res.unauthorized) {
+          setAuthStatus((prev) => ({ ...prev, authenticated: false }));
+          return;
+        }
+        if (
+          res.ok &&
+          res.hasSavedState &&
+          res.state &&
+          Array.isArray(res.state.workspaces) &&
+          res.state.workspaces.length > 0
+        ) {
+          const srvWorkspaces = res.state.workspaces;
+          const srvNodes = Array.isArray(res.state.nodes) ? res.state.nodes : [];
+          const srvActiveId =
+            res.state.activeWorkspaceId &&
+            srvWorkspaces.some((w) => w.id === res.state!.activeWorkspaceId)
+              ? res.state.activeWorkspaceId
+              : srvWorkspaces[0].id;
+
+          lastSavedServerSigRef.current = JSON.stringify({
+            activeWorkspaceId: srvActiveId,
+            workspaces: srvWorkspaces,
+            nodes: srvNodes,
+          });
+          setWorkspaces(srvWorkspaces);
+          setActiveWorkspaceId(srvActiveId);
+          setNodes(srvNodes);
+          setLockedEnvelope(null);
+          localStorage.setItem(
+            WORKSPACES_STORAGE_KEY,
+            JSON.stringify({ activeWorkspaceId: srvActiveId, workspaces: srvWorkspaces })
+          );
+          if (!masterPassphrase) {
+            localStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify({
+                format: 'opsdeck-vault-v2',
+                encrypted: false,
+                nodes: srvNodes,
+                workspaces: srvWorkspaces,
+                updatedAt: res.state.updatedAt || new Date().toISOString(),
+              } satisfies EncryptedVaultEnvelope)
+            );
+          }
+          setServerStateLoaded(true);
+          return;
+        }
+
+        if (res.ok && !res.hasSavedState) {
+          const hasCustomLocalData =
+            nodes.length > 0 ||
+            workspaces.length > 1 ||
+            workspaces[0]?.name !== '默认空间' ||
+            Boolean(workspaces[0]?.isPublic) ||
+            Boolean(workspaces[0]?.description);
+
+          if (lockedEnvelope) {
+            lastSavedServerSigRef.current = '';
+            pendingMigrationToastRef.current = true;
+          } else if (hasCustomLocalData) {
+            // Trigger immediate automatic migration of existing localStorage data to server
+            lastSavedServerSigRef.current = '';
+            pendingMigrationToastRef.current = true;
+          } else {
+            lastSavedServerSigRef.current = JSON.stringify({
+              activeWorkspaceId,
+              workspaces,
+              nodes,
+            });
+          }
+          setServerStateLoaded(true);
+          return;
+        }
+
+        // Transient fetch error: keep local state without overwriting server
+        lastSavedServerSigRef.current = JSON.stringify({
+          activeWorkspaceId,
+          workspaces,
+          nodes,
+        });
+        setServerStateLoaded(true);
+        notify('读取服务端数据失败，暂时显示本地缓存');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        lastSavedServerSigRef.current = JSON.stringify({
+          activeWorkspaceId,
+          workspaces,
+          nodes,
+        });
+        setServerStateLoaded(true);
+        notify('连接服务端失败，暂时显示本地缓存');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    publicMode,
+    hydrated,
+    authChecked,
+    authStatus.authenticated,
+    serverStateLoaded,
+    masterPassphrase,
+    lockedEnvelope,
+    activeWorkspaceId,
+    workspaces,
+    nodes,
+    notify,
+  ]);
+
+  // Persist changes back to server DATA_DIR automatically
+  useEffect(() => {
+    if (
+      publicMode !== 'admin' ||
+      !authStatus.authenticated ||
+      !serverStateLoaded ||
+      lockedEnvelope
+    ) {
+      return;
+    }
+    const payload = { activeWorkspaceId, workspaces, nodes };
+    const sig = JSON.stringify(payload);
+    if (sig === lastSavedServerSigRef.current) return;
+
+    const timer = window.setTimeout(() => {
+      void saveAdminState(payload).then((res) => {
+        if (res.unauthorized) {
+          setServerStateLoaded(false);
+          setAuthStatus((prev) => ({ ...prev, authenticated: false }));
+          return;
+        }
+        if (res.ok) {
+          lastSavedServerSigRef.current = sig;
+          if (pendingMigrationToastRef.current) {
+            pendingMigrationToastRef.current = false;
+            notify('已将本地站点数据同步至服务端，后续跨域名/设备自动同步');
+          }
+        }
+      });
+    }, 60);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    publicMode,
+    authStatus.authenticated,
+    serverStateLoaded,
+    lockedEnvelope,
+    activeWorkspaceId,
+    workspaces,
+    nodes,
+    notify,
+  ]);
 
   const persistNodes = useCallback(
     async (
@@ -408,7 +576,15 @@ export default function App() {
 
   // Automatically keep sanitized public workspace projections synced with server
   useEffect(() => {
-    if (publicMode !== 'admin' || !authStatus.authenticated || !hydrated || lockedEnvelope) return;
+    if (
+      publicMode !== 'admin' ||
+      !authStatus.authenticated ||
+      !hydrated ||
+      !serverStateLoaded ||
+      lockedEnvelope
+    ) {
+      return;
+    }
     for (const ws of workspaces) {
       if (ws.isPublic && (ws.publicRoute || ws.publicDomain)) {
         const publicNodes = buildPublicNodesForWorkspace(ws.id, nodes, workspaces);
@@ -433,6 +609,7 @@ export default function App() {
     publicMode,
     authStatus.authenticated,
     hydrated,
+    serverStateLoaded,
     lockedEnvelope,
     workspaces,
     nodes,
@@ -441,6 +618,8 @@ export default function App() {
 
   const handleLogout = async () => {
     await logoutAdminAccount();
+    lastSavedServerSigRef.current = '';
+    setServerStateLoaded(false);
     setAuthStatus({
       initialized: true,
       authenticated: false,
@@ -964,6 +1143,10 @@ export default function App() {
         }}
       />
     );
+  }
+
+  if (!serverStateLoaded) {
+    return <div className="min-h-screen bg-[#FAFAFA] dark:bg-[#09090B]" />;
   }
 
   if (lockedEnvelope) {
