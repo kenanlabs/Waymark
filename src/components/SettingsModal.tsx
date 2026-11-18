@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -17,16 +17,25 @@ import {
   ShieldCheck,
   Sun,
   Trash2,
+  Type,
   Unlock,
   Upload,
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { BgPattern, BgTone, EncryptedVaultEnvelope, PanelNode, Workspace } from '../types/panel';
+import type {
+  BgPattern,
+  BgTone,
+  EncryptedVaultEnvelope,
+  FontFamily,
+  PanelNode,
+  Workspace,
+} from '../types/panel';
 import { changeAdminPassword } from '../utils/auth';
 import { candidatesToPanelNodes, parseBatchInput } from '../utils/batchParser';
 import { decryptVaultBundle, encryptVaultNodes } from '../utils/crypto';
 import { EXTENSION_VERSION } from '../utils/extensionMeta';
+import { FONT_PRESETS, isFontCached, loadAndApplyFont } from '../utils/fontLoader';
 import { BRIDGE_VERSION, generateUserscriptSource } from '../utils/userscript';
 import { BG_PATTERN_PRESETS, BG_TONE_PRESETS } from '../utils/workspacePresets';
 
@@ -41,9 +50,11 @@ interface SettingsModalProps {
   theme: 'light' | 'dark';
   bgTone: BgTone;
   bgPattern: BgPattern;
+  fontFamily: FontFamily;
   onChangeTheme: (theme: 'light' | 'dark') => void;
   onChangeBgTone: (tone: BgTone) => void;
   onChangeBgPattern: (pattern: BgPattern) => void;
+  onChangeFontFamily: (font: FontFamily) => void;
   extensionActive: boolean;
   extensionVersion?: string | null;
   bridgeActive: boolean;
@@ -110,9 +121,11 @@ export function SettingsModal({
   theme,
   bgTone,
   bgPattern,
+  fontFamily,
   onChangeTheme,
   onChangeBgTone,
   onChangeBgPattern,
+  onChangeFontFamily,
   extensionActive,
   extensionVersion,
   bridgeActive,
@@ -137,6 +150,70 @@ export function SettingsModal({
   const [showScriptCode, setShowScriptCode] = useState(false);
   const [showUserscriptFallback, setShowUserscriptFallback] = useState(false);
   const [downloadingExt, setDownloadingExt] = useState(false);
+  const [downloadingFont, setDownloadingFont] = useState<FontFamily | null>(null);
+  const [fontProgress, setFontProgress] = useState<Partial<Record<FontFamily, number>>>({});
+  const [cachedFonts, setCachedFonts] = useState<Partial<Record<FontFamily, boolean>>>({
+    default: true,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void Promise.all(
+      FONT_PRESETS.map(async (preset) => {
+        const cached = await isFontCached(preset.id);
+        return [preset.id, cached] as const;
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      const next: Partial<Record<FontFamily, boolean>> = {};
+      for (const [id, ok] of entries) {
+        next[id] = ok;
+      }
+      setCachedFonts(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, fontFamily]);
+
+  const handleSelectFont = async (targetFont: FontFamily) => {
+    if (downloadingFont) return;
+    if (targetFont === 'default') {
+      await loadAndApplyFont('default');
+      onChangeFontFamily('default');
+      return;
+    }
+
+    const alreadyCached = await isFontCached(targetFont);
+    if (alreadyCached) {
+      const ok = await loadAndApplyFont(targetFont);
+      if (ok) {
+        setCachedFonts((prev) => ({ ...prev, [targetFont]: true }));
+        onChangeFontFamily(targetFont);
+      } else {
+        onNotify('加载缓存字体失败，请重试');
+      }
+      return;
+    }
+
+    setDownloadingFont(targetFont);
+    setFontProgress((prev) => ({ ...prev, [targetFont]: 2 }));
+
+    const ok = await loadAndApplyFont(targetFont, (pct) => {
+      setFontProgress((prev) => ({ ...prev, [targetFont]: pct }));
+    });
+
+    setDownloadingFont(null);
+    if (ok) {
+      setCachedFonts((prev) => ({ ...prev, [targetFont]: true }));
+      setFontProgress((prev) => ({ ...prev, [targetFont]: 100 }));
+      onChangeFontFamily(targetFont);
+    } else {
+      setFontProgress((prev) => ({ ...prev, [targetFont]: 0 }));
+      onNotify('字体下载失败，请检查网络连接后重试');
+    }
+  };
 
   // Batch import state
   const [rawText, setRawText] = useState('');
@@ -630,6 +707,108 @@ export function SettingsModal({
                                   </div>
                                   <p className="mt-0.5 text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate">
                                     {pat.subtitle}
+                                  </p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Interface Font Selection with Button-Integrated Left-to-Right Download Progress */}
+                      <div className="pt-4 border-t border-[#E4E4E7] dark:border-[#27272A] space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Type className="w-4 h-4 text-[#09090B] dark:text-[#FAFAFA]" aria-hidden="true" />
+                            <span className="text-xs font-semibold text-[#09090B] dark:text-[#FAFAFA]">
+                              界面字体
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
+                            按需下载至本地浏览器缓存
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          {FONT_PRESETS.map((preset) => {
+                            const active = fontFamily === preset.id;
+                            const isDownloading = downloadingFont === preset.id;
+                            const progress = isDownloading ? (fontProgress[preset.id] ?? 2) : 0;
+                            const isCached = Boolean(cachedFonts[preset.id]);
+                            const activeTone =
+                              BG_TONE_PRESETS.find((t) => t.id === bgTone) ?? BG_TONE_PRESETS[0];
+                            const surfaceHex =
+                              theme === 'dark' ? activeTone.darkSurface : activeTone.lightSurface;
+                            const borderHex =
+                              theme === 'dark' ? activeTone.darkBorder : activeTone.lightBorder;
+
+                            return (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => void handleSelectFont(preset.id)}
+                                disabled={Boolean(downloadingFont && downloadingFont !== preset.id)}
+                                aria-pressed={active}
+                                aria-busy={isDownloading}
+                                className={`group relative overflow-hidden flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all disabled:opacity-50 ${
+                                  active
+                                    ? 'wm-card-selected'
+                                    : isDownloading
+                                    ? 'border-[var(--wm-select-border)]'
+                                    : 'border-[#E4E4E7] dark:border-[#27272A] hover:border-[#A1A1AA] dark:hover:border-[#3F3F46]'
+                                }`}
+                              >
+                                {/* Left-to-right progress fill fused directly into the button background */}
+                                {isDownloading && (
+                                  <div
+                                    aria-hidden="true"
+                                    className="pointer-events-none absolute inset-y-0 left-0 z-0 transition-[width] duration-150 ease-out"
+                                    style={{
+                                      width: `${Math.max(3, Math.min(100, progress))}%`,
+                                      backgroundColor: 'var(--wm-select-bg)',
+                                      borderRight:
+                                        progress < 100
+                                          ? '1.5px solid var(--wm-select-border)'
+                                          : 'none',
+                                    }}
+                                  />
+                                )}
+
+                                <div
+                                  className="relative z-10 w-10 h-9 rounded-lg border shrink-0 flex items-center justify-center text-[13px] font-semibold text-[#09090B] dark:text-[#FAFAFA] shadow-2xs select-none"
+                                  style={{
+                                    backgroundColor: surfaceHex,
+                                    borderColor: borderHex,
+                                    fontFamily:
+                                      preset.id === 'default'
+                                        ? 'Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif'
+                                        : preset.cssFamilyName && isCached
+                                        ? `"${preset.cssFamilyName}", "STKaiti", "Kaiti SC", serif`
+                                        : '"STKaiti", "Kaiti SC", "KaiTi", serif',
+                                  }}
+                                  aria-hidden="true"
+                                >
+                                  {preset.badgeText}
+                                </div>
+
+                                <div className="relative z-10 min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-1.5">
+                                    <span className="text-xs font-medium text-[#09090B] dark:text-[#FAFAFA] truncate">
+                                      {preset.name}
+                                    </span>
+                                    {isDownloading ? (
+                                      <span className="font-mono text-[11px] font-semibold tabular-nums text-[var(--wm-accent-ink)] shrink-0">
+                                        {progress}%
+                                      </span>
+                                    ) : active ? (
+                                      <Check
+                                        className="w-3.5 h-3.5 text-[var(--wm-accent-ink)] shrink-0"
+                                        aria-hidden="true"
+                                      />
+                                    ) : null}
+                                  </div>
+                                  <p className="mt-0.5 text-[11px] text-[#71717A] dark:text-[#A1A1AA] truncate">
+                                    {preset.subtitle}
                                   </p>
                                 </div>
                               </button>

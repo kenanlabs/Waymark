@@ -96,6 +96,8 @@ export type BgTone = 'pure' | 'paper' | 'sage' | 'stone' | 'oat' | 'mist';
 
 export type BgPattern = 'none' | 'dots' | 'grid' | 'paper' | 'lines' | 'rings';
 
+export type FontFamily = 'default' | 'lxgw-wenkai' | 'tsanger-jinkai';
+
 export type NavSection = 'directory' | 'groups' | 'bridge' | 'appearance' | 'security' | 'about';
 
 export type ViewMode = 'table' | 'grid';

@@ -71,6 +71,7 @@ interface ServerWorkspaceState {
   viewMode?: 'grid' | 'table';
   bgTone?: string;
   bgPattern?: string;
+  fontFamily?: string;
   workspaces: Array<Record<string, unknown>>;
   nodes: Array<Record<string, unknown>>;
   updatedAt: string;
@@ -184,6 +185,11 @@ function readServerWorkspaceState(): ServerWorkspaceState | null {
         version: 1,
         activeWorkspaceId:
           typeof parsed.activeWorkspaceId === 'string' ? parsed.activeWorkspaceId : undefined,
+        viewMode:
+          parsed.viewMode === 'table' || parsed.viewMode === 'grid' ? parsed.viewMode : undefined,
+        bgTone: typeof parsed.bgTone === 'string' ? parsed.bgTone : undefined,
+        bgPattern: typeof parsed.bgPattern === 'string' ? parsed.bgPattern : undefined,
+        fontFamily: typeof parsed.fontFamily === 'string' ? parsed.fontFamily : undefined,
         workspaces: parsed.workspaces,
         nodes: parsed.nodes,
         updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date().toISOString(),
@@ -841,6 +847,7 @@ async function startServer(): Promise<void> {
       viewMode?: string;
       bgTone?: string;
       bgPattern?: string;
+      fontFamily?: string;
       workspaces?: unknown;
       nodes?: unknown;
     };
@@ -875,6 +882,12 @@ async function startServer(): Promise<void> {
       body.bgPattern === 'rings'
         ? body.bgPattern
         : undefined;
+    const fontFamily =
+      body.fontFamily === 'default' ||
+      body.fontFamily === 'lxgw-wenkai' ||
+      body.fontFamily === 'tsanger-jinkai'
+        ? body.fontFamily
+        : undefined;
     const nextState: ServerWorkspaceState = {
       version: 1,
       activeWorkspaceId:
@@ -884,6 +897,7 @@ async function startServer(): Promise<void> {
       viewMode,
       bgTone,
       bgPattern,
+      fontFamily,
       workspaces: body.workspaces as Array<Record<string, unknown>>,
       nodes: body.nodes as Array<Record<string, unknown>>,
       updatedAt,

@@ -37,6 +37,7 @@ interface PanelDrawerProps {
   open: boolean;
   workspace: Workspace;
   editingNode: PanelNode | null;
+  defaultGroup?: string;
   existingGroups: string[];
   onClose: () => void;
   onSave: (nodeData: Omit<PanelNode, 'id' | 'createdAt' | 'updatedAt'>, existingId?: string) => void;
@@ -59,6 +60,7 @@ export function PanelDrawer({
   open,
   workspace,
   editingNode,
+  defaultGroup,
   existingGroups,
   onClose,
   onSave,
@@ -86,7 +88,7 @@ export function PanelDrawer({
     normalizeWorkspaceCustomFields(workspace.customFields)
   );
   const [editingFieldDefs, setEditingFieldDefs] = useState(false);
-  const [showOptional, setShowOptional] = useState(false);
+  const [showOptional, setShowOptional] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -119,7 +121,6 @@ export function PanelDrawer({
         field2: editingNode.customValues?.field2 || '',
         field3: editingNode.customValues?.field3 || '',
       };
-      const hasAnyVal = Boolean(nextVals.field1 || nextVals.field2 || nextVals.field3);
       setName(editingNode.name);
       setBaseUrl(editingNode.baseUrl);
       setEntrance(editingNode.entrance);
@@ -130,7 +131,7 @@ export function PanelDrawer({
       setAutoSubmit(editingNode.autoSubmit);
       setGroup(editingNode.group || '默认分组');
       setCustomValues(nextVals);
-      setShowOptional(hasAnyVal);
+      setShowOptional(true);
     } else {
       setName('');
       setBaseUrl('');
@@ -140,11 +141,15 @@ export function PanelDrawer({
       setUsername('');
       setPassword('');
       setAutoSubmit(true);
-      setGroup(workspace.groups[0] || '默认分组');
+      setGroup(
+        defaultGroup && defaultGroup !== 'all'
+          ? defaultGroup
+          : workspace.groups[0] || '默认分组'
+      );
       setCustomValues({ field1: '', field2: '', field3: '' });
-      setShowOptional(false);
+      setShowOptional(true);
     }
-  }, [open, editingNode, workspace]);
+  }, [open, editingNode, workspace, defaultGroup]);
 
   const isDirty = useMemo(() => {
     if (!open) return false;

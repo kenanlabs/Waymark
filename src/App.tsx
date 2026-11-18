@@ -20,6 +20,7 @@ import type {
   BgPattern,
   BgTone,
   EncryptedVaultEnvelope,
+  FontFamily,
   PanelNode,
   PublicNodeItem,
   PublicWorkspaceViewData,
@@ -51,6 +52,7 @@ import {
   EXTENSION_READY_EVENT,
   EXTENSION_VERSION,
 } from './utils/extensionMeta';
+import { loadAndApplyFont, normalizeFontFamily } from './utils/fontLoader';
 import {
   createDefaultWorkspace,
   DEFAULT_WORKSPACE_GROUPS,
@@ -64,6 +66,7 @@ const STORAGE_KEY = 'paneldeck_vault_v1';
 const THEME_KEY = 'paneldeck_theme_v1';
 const BG_TONE_KEY = 'waymark_bg_tone_v2';
 const BG_PATTERN_KEY = 'waymark_bg_pattern_v2';
+const FONT_FAMILY_KEY = 'waymark_font_family_v1';
 const VIEW_MODE_KEY = 'waymark_view_mode_v1';
 const LEGACY_GROUPS_KEY = 'paneldeck_groups_v1';
 const WORKSPACES_STORAGE_KEY = 'opsdeck_workspaces_v1';
@@ -193,6 +196,14 @@ export default function App() {
       return 'none';
     }
   });
+  const [fontFamily, setFontFamily] = useState<FontFamily>(() => {
+    if (typeof window === 'undefined') return 'default';
+    try {
+      return normalizeFontFamily(localStorage.getItem(FONT_FAMILY_KEY));
+    } catch {
+      return 'default';
+    }
+  });
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -242,6 +253,15 @@ export default function App() {
       // Ignore storage errors
     }
   }, [bgPattern]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FONT_FAMILY_KEY, fontFamily);
+    } catch {
+      // Ignore storage errors
+    }
+    void loadAndApplyFont(fontFamily);
+  }, [fontFamily]);
 
   // View mode local persistence
   useEffect(() => {
@@ -449,12 +469,16 @@ export default function App() {
           const srvBgPattern: BgPattern = res.state.bgPattern
             ? normalizeBgPattern(res.state.bgPattern)
             : bgPattern;
+          const srvFontFamily: FontFamily = res.state.fontFamily
+            ? normalizeFontFamily(res.state.fontFamily)
+            : fontFamily;
 
           lastSavedServerSigRef.current = JSON.stringify({
             activeWorkspaceId: srvActiveId,
             viewMode: srvViewMode,
             bgTone: srvBgTone,
             bgPattern: srvBgPattern,
+            fontFamily: srvFontFamily,
             workspaces: srvWorkspaces,
             nodes: srvNodes,
           });
@@ -463,6 +487,7 @@ export default function App() {
           setViewMode(srvViewMode);
           setBgTone(srvBgTone);
           setBgPattern(srvBgPattern);
+          setFontFamily(srvFontFamily);
           setNodes(srvNodes);
           setLockedEnvelope(null);
           localStorage.setItem(
@@ -506,6 +531,7 @@ export default function App() {
               viewMode,
               bgTone,
               bgPattern,
+              fontFamily,
               workspaces,
               nodes,
             });
@@ -520,6 +546,7 @@ export default function App() {
           viewMode,
           bgTone,
           bgPattern,
+          fontFamily,
           workspaces,
           nodes,
         });
@@ -533,6 +560,7 @@ export default function App() {
           viewMode,
           bgTone,
           bgPattern,
+          fontFamily,
           workspaces,
           nodes,
         });
@@ -555,6 +583,7 @@ export default function App() {
     viewMode,
     bgTone,
     bgPattern,
+    fontFamily,
     workspaces,
     nodes,
     notify,
@@ -570,7 +599,15 @@ export default function App() {
     ) {
       return;
     }
-    const payload = { activeWorkspaceId, viewMode, bgTone, bgPattern, workspaces, nodes };
+    const payload = {
+      activeWorkspaceId,
+      viewMode,
+      bgTone,
+      bgPattern,
+      fontFamily,
+      workspaces,
+      nodes,
+    };
     const sig = JSON.stringify(payload);
     if (sig === lastSavedServerSigRef.current) return;
 
@@ -601,6 +638,7 @@ export default function App() {
     viewMode,
     bgTone,
     bgPattern,
+    fontFamily,
     workspaces,
     nodes,
     notify,
@@ -1681,6 +1719,7 @@ export default function App() {
         open={drawerOpen}
         workspace={activeWorkspace}
         editingNode={editingNode}
+        defaultGroup={selectedGroup !== 'all' ? selectedGroup : undefined}
         existingGroups={allKnownGroups}
         onClose={() => {
           setDrawerOpen(false);
@@ -1723,12 +1762,16 @@ export default function App() {
         theme={theme}
         bgTone={bgTone}
         bgPattern={bgPattern}
+        fontFamily={fontFamily}
         onChangeTheme={setTheme}
         onChangeBgTone={(nextTone) => {
           setBgTone(nextTone);
         }}
         onChangeBgPattern={(nextPattern) => {
           setBgPattern(nextPattern);
+        }}
+        onChangeFontFamily={(nextFont) => {
+          setFontFamily(nextFont);
         }}
         extensionActive={extensionActive}
         extensionVersion={extensionVersion}

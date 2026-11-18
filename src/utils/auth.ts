@@ -1042,6 +1042,7 @@ export interface PersistedWorkspaceState {
   viewMode?: ViewMode;
   bgTone?: import('../types/panel').BgTone;
   bgPattern?: import('../types/panel').BgPattern;
+  fontFamily?: import('../types/panel').FontFamily;
   workspaces: Workspace[];
   nodes: import('../types/panel').PanelNode[];
   updatedAt?: string;
@@ -1093,6 +1094,7 @@ export async function saveAdminState(payload: {
   viewMode?: ViewMode;
   bgTone?: import('../types/panel').BgTone;
   bgPattern?: import('../types/panel').BgPattern;
+  fontFamily?: import('../types/panel').FontFamily;
   workspaces: Workspace[];
   nodes: import('../types/panel').PanelNode[];
 }): Promise<{ ok: boolean; unauthorized?: boolean; message?: string }> {

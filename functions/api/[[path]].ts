@@ -54,6 +54,7 @@ interface ServerWorkspaceState {
   viewMode?: 'grid' | 'table';
   bgTone?: string;
   bgPattern?: string;
+  fontFamily?: string;
   workspaces: Array<Record<string, unknown>>;
   nodes: Array<Record<string, unknown>>;
   updatedAt: string;
@@ -519,6 +520,7 @@ export async function onRequest(context: PagesContext): Promise<Response> {
         viewMode: body.viewMode === 'table' ? 'table' : 'grid',
         bgTone: typeof body.bgTone === 'string' ? body.bgTone : undefined,
         bgPattern: typeof body.bgPattern === 'string' ? body.bgPattern : undefined,
+        fontFamily: typeof body.fontFamily === 'string' ? body.fontFamily : undefined,
         workspaces: Array.isArray(body.workspaces) ? body.workspaces : [],
         nodes: Array.isArray(body.nodes) ? body.nodes : [],
         updatedAt: new Date().toISOString(),
