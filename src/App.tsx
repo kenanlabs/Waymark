@@ -37,6 +37,7 @@ import {
 } from './utils/auth';
 import { copyTextToClipboard, decryptVaultBundle, encryptVaultNodes, generateId } from './utils/crypto';
 import {
+  BRIDGE_VERSION,
   buildPanelTargetUrl,
   normalizeBaseUrl,
   normalizeEntrance,
@@ -1209,6 +1210,9 @@ export default function App() {
         theme={theme}
         onToggleTheme={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
         onOpenSettings={() => openSettings(bridgeActive ? 'import' : 'bridge')}
+        onOpenBridge={() => openSettings('bridge')}
+        bridgeStatus={bridgeActive && bridgeVersion !== BRIDGE_VERSION ? 'stale' : undefined}
+        bridgeVersion={bridgeVersion}
         onAddNew={() => {
           setEditingNode(null);
           setDrawerOpen(true);

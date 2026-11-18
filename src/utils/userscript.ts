@@ -1,6 +1,6 @@
 import type { BridgeLaunchPayload, PanelNode, PanelType } from '../types/panel';
 
-export const BRIDGE_VERSION = '1.5.0';
+export const BRIDGE_VERSION = '1.5.1';
 export const BRIDGE_PROBE_REQUEST_EVENT = 'waymark-probe-request';
 export const BRIDGE_PROBE_RESULT_EVENT = 'waymark-probe-result';
 
@@ -277,11 +277,29 @@ function __wmFindPassword() {
   for (var d = 0; d < direct.length; d++) {
     if (__wmVisible(direct[d]) && !direct[d].disabled) return direct[d];
   }
-  var list = __wmAll(document, 'input[type="password"]');
+  var list = __wmAll(document, 'input');
   for (var i = 0; i < list.length; i++) {
-    if (__wmVisible(list[i]) && !list[i].disabled) return list[i];
+    var input = list[i];
+    if (!__wmVisible(input) || input.disabled) continue;
+    if (__wmLooksLikePassword(input)) return input;
   }
   return null;
+}
+
+function __wmLooksLikePassword(input) {
+  if (input.type === 'password') return true;
+  var autocomplete = String(input.getAttribute('autocomplete') || '').toLowerCase();
+  if (autocomplete.indexOf('current-password') >= 0 || autocomplete.indexOf('new-password') >= 0) {
+    return true;
+  }
+  var clue = [
+    input.name || '',
+    input.id || '',
+    input.getAttribute('placeholder') || '',
+    input.getAttribute('aria-label') || '',
+  ].join(' ');
+  if (!/(pass|pwd|密码)/i.test(clue)) return false;
+  return !/user|account|login|email|name|phone|账号|用户|邮箱|手机|登录名/i.test(clue);
 }
 
 function __wmFindScope(passInput) {
@@ -725,6 +743,8 @@ ${core}
     try { GM_deleteValue(STORAGE_KEY); } catch (_) {}
     return;
   }
+
+  __wmToast('Waymark：已收到登录信息，正在填充…', false);
 
   __wmStartAutoFill({
     username: payload.username || '',

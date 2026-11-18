@@ -1,4 +1,4 @@
-import { LogOut, Moon, Plus, Search, SlidersHorizontal, Sun } from 'lucide-react';
+import { AlertTriangle, LogOut, Moon, Plus, Search, SlidersHorizontal, Sun } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 interface TopBarProps {
@@ -8,6 +8,9 @@ interface TopBarProps {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   onOpenSettings: () => void;
+  onOpenBridge?: () => void;
+  bridgeStatus?: 'ok' | 'stale';
+  bridgeVersion?: string | null;
   onAddNew: () => void;
   adminUsername?: string;
   onLogout: () => void;
@@ -20,6 +23,9 @@ export function TopBar({
   theme,
   onToggleTheme,
   onOpenSettings,
+  onOpenBridge,
+  bridgeStatus,
+  bridgeVersion,
   onAddNew,
   adminUsername,
   onLogout,
@@ -58,6 +64,18 @@ export function TopBar({
 
         {/* Zone 3: Compact utility & primary action */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {bridgeStatus === 'stale' && (
+            <button
+              type="button"
+              onClick={onOpenBridge}
+              title={`检测到脚本 v${bridgeVersion || '未知'}，请刷新页面或重新安装最新版脚本`}
+              className="h-8 inline-flex items-center gap-1 px-2 text-[11px] font-medium text-[#B45309] dark:text-[#FCD34D] bg-[#FFFBEB] dark:bg-[#271C0B] border border-[#FDE68A] dark:border-[#78350F] rounded-lg hover:bg-[#FEF3C7] dark:hover:bg-[#2D210E] transition-colors"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">脚本需刷新</span>
+            </button>
+          )}
+
           <motion.button
             type="button"
             whileTap={{ scale: 0.94 }}

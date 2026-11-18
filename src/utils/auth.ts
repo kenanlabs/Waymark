@@ -193,7 +193,8 @@ export async function probePanelNode(params: {
   const bridgeVersion = getBridgeVersion();
   const bridgeStale =
     Boolean(bridgeVersion) && !isVersionAtLeast(bridgeVersion, BRIDGE_VERSION);
-  const bridgeNotResponding = '桥接脚本未响应，请在设置中重新安装最新版脚本后重试。';
+  const bridgeNotResponding =
+    '桥接脚本未响应。请刷新 Waymark 页面、关闭旧目标标签页，并确认脚本为最新版后重试。';
   let bridgeUnsupported = false;
   let bridged: BridgeProbeResponse | null = null;
 
@@ -250,12 +251,12 @@ export async function probePanelNode(params: {
 
     if (isHttpsPage && parsed.protocol === 'http:' && !isLocalTarget) {
       const bridgeHint = bridgeStale
-        ? `检测到旧版脚本 ${bridgeVersion}，请重新安装 ${BRIDGE_VERSION} 后使用脚本代理检测。`
+        ? `检测到旧版脚本 ${bridgeVersion}，请刷新本页并重新安装 ${BRIDGE_VERSION} 后使用脚本代理检测。`
         : bridgeUnsupported
           ? '当前脚本未获得跨域请求权限，请在 Tampermonkey 中允许该脚本访问目标域名后重试。'
           : bridged
           ? bridgeNotResponding
-          : `安装 Tampermonkey 自动登录脚本后，可由脚本代为完成跨域检测；未安装脚本时请点击卡片直接打开验证。`;
+          : '未在当前页面检测到脚本。若刚安装/更新脚本，请刷新本页并关闭旧目标标签页后重试；未安装脚本时请点击卡片直接打开验证。';
       return {
         status: 'blocked',
         latencyMs: 0,
@@ -324,12 +325,12 @@ export async function probePanelNode(params: {
 
     if (isHttpsPage && parsed.protocol === 'http:' && !isLocalTarget) {
       const bridgeHint = bridgeStale
-        ? `检测到旧版脚本 ${bridgeVersion}，请重新安装 ${BRIDGE_VERSION} 后使用脚本代理检测。`
+        ? `检测到旧版脚本 ${bridgeVersion}，请刷新本页并重新安装 ${BRIDGE_VERSION} 后使用脚本代理检测。`
         : bridgeUnsupported
           ? '当前脚本未获得跨域请求权限，请在 Tampermonkey 中允许该脚本访问目标域名后重试。'
           : bridged
           ? bridgeNotResponding
-          : '安装/更新 Tampermonkey 脚本后可绕过该限制完成检测。';
+          : '未在当前页面检测到脚本。若刚安装/更新脚本，请刷新本页并关闭旧目标标签页后重试。';
       return {
         status: 'blocked',
         latencyMs,
