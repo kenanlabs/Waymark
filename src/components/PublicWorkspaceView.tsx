@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -32,6 +32,8 @@ function formatHostDisplay(targetUrl: string): string {
   }
 }
 
+const PUBLIC_VIEW_MODE_KEY = 'waymark_public_view_mode_v1';
+
 export function PublicWorkspaceView({
   loading,
   workspace,
@@ -41,8 +43,24 @@ export function PublicWorkspaceView({
 }: PublicWorkspaceViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === 'undefined') return 'grid';
+    try {
+      const saved = localStorage.getItem(PUBLIC_VIEW_MODE_KEY);
+      return saved === 'table' ? 'table' : 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PUBLIC_VIEW_MODE_KEY, viewMode);
+    } catch {
+      // Ignore storage errors
+    }
+  }, [viewMode]);
 
   const groupCounts = useMemo(() => {
     if (!workspace) return [];

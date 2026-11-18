@@ -88,7 +88,7 @@ export function FirstPanelOnboarding({
     } catch {
       setProbeResult({
         status: 'unreachable',
-        message: '请求探测服务失败，请确认本地后端服务正在运行后重试。',
+        message: '浏览器连通性探测异常，请检查网络或目标地址后重试。',
         checkedAt: new Date().toISOString(),
       });
     } finally {

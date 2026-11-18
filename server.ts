@@ -59,6 +59,7 @@ interface SessionPayload {
 interface ServerWorkspaceState {
   version: 1;
   activeWorkspaceId?: string;
+  viewMode?: 'grid' | 'table';
   workspaces: Array<Record<string, unknown>>;
   nodes: Array<Record<string, unknown>>;
   updatedAt: string;
@@ -791,6 +792,7 @@ async function startServer(): Promise<void> {
   app.put('/api/admin/state', requireAdmin, (req, res) => {
     const body = req.body as {
       activeWorkspaceId?: string;
+      viewMode?: string;
       workspaces?: unknown;
       nodes?: unknown;
     };
@@ -805,12 +807,15 @@ async function startServer(): Promise<void> {
     }
 
     const updatedAt = new Date().toISOString();
+    const viewMode =
+      body.viewMode === 'table' || body.viewMode === 'grid' ? body.viewMode : undefined;
     const nextState: ServerWorkspaceState = {
       version: 1,
       activeWorkspaceId:
         typeof body.activeWorkspaceId === 'string' && body.activeWorkspaceId.trim()
           ? body.activeWorkspaceId.trim()
           : undefined,
+      viewMode,
       workspaces: body.workspaces as Array<Record<string, unknown>>,
       nodes: body.nodes as Array<Record<string, unknown>>,
       updatedAt,

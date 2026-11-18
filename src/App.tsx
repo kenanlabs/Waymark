@@ -49,6 +49,7 @@ import {
 
 const STORAGE_KEY = 'paneldeck_vault_v1';
 const THEME_KEY = 'paneldeck_theme_v1';
+const VIEW_MODE_KEY = 'waymark_view_mode_v1';
 const LEGACY_GROUPS_KEY = 'paneldeck_groups_v1';
 const WORKSPACES_STORAGE_KEY = 'opsdeck_workspaces_v1';
 
@@ -127,7 +128,15 @@ export default function App() {
   const lastSavedServerSigRef = useRef<string>('');
   const pendingMigrationToastRef = useRef(false);
 
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === 'undefined') return 'grid';
+    try {
+      const saved = localStorage.getItem(VIEW_MODE_KEY);
+      return saved === 'table' ? 'table' : 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
   const [sortBy, setSortBy] = useState<SortOption>('pinned');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
@@ -179,6 +188,16 @@ export default function App() {
     }
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
+
+  // View mode local persistence
+  useEffect(() => {
+    if (publicMode !== 'admin') return;
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, viewMode);
+    } catch {
+      // Ignore storage errors
+    }
+  }, [publicMode, viewMode]);
 
   // Persist workspaces config to local cache (admin mode only, after server state loaded)
   useEffect(() => {
@@ -253,7 +272,15 @@ export default function App() {
     };
     checkBridge();
     window.addEventListener('paneldeck-bridge-ready', checkBridge);
-    return () => window.removeEventListener('paneldeck-bridge-ready', checkBridge);
+    const attrObserver = new MutationObserver(checkBridge);
+    attrObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-paneldeck-bridge'],
+    });
+    return () => {
+      window.removeEventListener('paneldeck-bridge-ready', checkBridge);
+      attrObserver.disconnect();
+    };
   }, [publicMode]);
 
   // Global keyboard shortcuts (active only when admin is authenticated)
@@ -345,14 +372,20 @@ export default function App() {
             srvWorkspaces.some((w) => w.id === res.state!.activeWorkspaceId)
               ? res.state.activeWorkspaceId
               : srvWorkspaces[0].id;
+          const srvViewMode: ViewMode =
+            res.state.viewMode === 'table' || res.state.viewMode === 'grid'
+              ? res.state.viewMode
+              : viewMode;
 
           lastSavedServerSigRef.current = JSON.stringify({
             activeWorkspaceId: srvActiveId,
+            viewMode: srvViewMode,
             workspaces: srvWorkspaces,
             nodes: srvNodes,
           });
           setWorkspaces(srvWorkspaces);
           setActiveWorkspaceId(srvActiveId);
+          setViewMode(srvViewMode);
           setNodes(srvNodes);
           setLockedEnvelope(null);
           localStorage.setItem(
@@ -393,6 +426,7 @@ export default function App() {
           } else {
             lastSavedServerSigRef.current = JSON.stringify({
               activeWorkspaceId,
+              viewMode,
               workspaces,
               nodes,
             });
@@ -404,6 +438,7 @@ export default function App() {
         // Transient fetch error: keep local state without overwriting server
         lastSavedServerSigRef.current = JSON.stringify({
           activeWorkspaceId,
+          viewMode,
           workspaces,
           nodes,
         });
@@ -414,6 +449,7 @@ export default function App() {
         if (cancelled) return;
         lastSavedServerSigRef.current = JSON.stringify({
           activeWorkspaceId,
+          viewMode,
           workspaces,
           nodes,
         });
@@ -433,6 +469,7 @@ export default function App() {
     masterPassphrase,
     lockedEnvelope,
     activeWorkspaceId,
+    viewMode,
     workspaces,
     nodes,
     notify,
@@ -448,7 +485,7 @@ export default function App() {
     ) {
       return;
     }
-    const payload = { activeWorkspaceId, workspaces, nodes };
+    const payload = { activeWorkspaceId, viewMode, workspaces, nodes };
     const sig = JSON.stringify(payload);
     if (sig === lastSavedServerSigRef.current) return;
 
@@ -476,6 +513,7 @@ export default function App() {
     serverStateLoaded,
     lockedEnvelope,
     activeWorkspaceId,
+    viewMode,
     workspaces,
     nodes,
     notify,
@@ -968,7 +1006,14 @@ export default function App() {
       autoSubmit: node.autoSubmit,
       ts: Date.now(),
     };
-    window.dispatchEvent(new CustomEvent('1panel-hub-launch', { detail: payload }));
+    window.dispatchEvent(
+      new CustomEvent('1panel-hub-launch', { detail: JSON.stringify(payload) })
+    );
+    try {
+      window.postMessage({ type: 'waymark-hub-launch', payload }, window.location.origin);
+    } catch {
+      // Ignore postMessage errors
+    }
 
     const now = new Date().toISOString();
     updateNodes((prev) =>

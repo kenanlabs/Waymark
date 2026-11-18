@@ -503,7 +503,7 @@ export function SettingsModal({
                               <div className="text-[11px] text-[#71717A]">
                                 {envManaged
                                   ? '当前管理员凭据由服务端环境变量托管'
-                                  : '已启用服务端会话鉴权，仅管理员可访问本管理台与探测接口'}
+                                  : '已启用服务端会话鉴权，仅管理员可访问本管理台'}
                               </div>
                             </div>
                           </div>

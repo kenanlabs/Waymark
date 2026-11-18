@@ -251,7 +251,7 @@ export function PanelTable({
                       type="button"
                       onClick={() => onProbe(node)}
                       disabled={node.probe?.status === 'checking'}
-                      title="测试连通性与凭据"
+                      title="测试浏览器连通性"
                       aria-label={`检测 ${node.name} 连通性`}
                       className="p-1.5 text-[#71717A] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white hover:bg-[#F4F4F5] dark:hover:bg-[#27272A] rounded-md transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white"
                     >

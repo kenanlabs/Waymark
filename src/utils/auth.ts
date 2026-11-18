@@ -4,6 +4,7 @@ import type {
   PanelVersion,
   PublicNodeItem,
   PublicWorkspaceViewData,
+  ViewMode,
   Workspace,
 } from '../types/panel';
 
@@ -131,26 +132,150 @@ export async function changeAdminPassword(
 export async function probePanelNode(params: {
   baseUrl: string;
   entrance: string;
-  username: string;
-  password: string;
-  version: PanelVersion;
+  username?: string;
+  password?: string;
+  version?: PanelVersion;
   panelType?: PanelType;
-  verifyAuth: boolean;
+  verifyAuth?: boolean;
 }): Promise<PanelProbeResult & { unauthorized?: boolean }> {
-  const resp = await fetch('/api/probe', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAdminHeaders(),
-    },
-    body: JSON.stringify(params),
-  });
-  const data = (await resp.json()) as PanelProbeResult;
-  if (resp.status === 401) {
-    return { ...data, unauthorized: true };
+  const rawUrl = String(params.baseUrl || '').trim();
+  const checkedAt = new Date().toISOString();
+
+  if (!rawUrl) {
+    return {
+      status: 'unreachable',
+      message: '缺少访问地址',
+      checkedAt,
+    };
   }
-  return data;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(/^https?:\/\//i.test(rawUrl) ? rawUrl : `http://${rawUrl}`);
+  } catch {
+    return {
+      status: 'unreachable',
+      message: '访问地址格式无效',
+      checkedAt,
+    };
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return {
+      status: 'unreachable',
+      message: '仅支持 HTTP 或 HTTPS 协议',
+      checkedAt,
+    };
+  }
+
+  const cleanedEntrance = String(params.entrance || '')
+    .trim()
+    .replace(/^\/+|\/+$/g, '');
+  const entrancePath = cleanedEntrance ? `/${cleanedEntrance}` : '';
+  const targetUrl = `${parsed.origin}${entrancePath}`;
+
+  const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const controller = new AbortController();
+  const timeoutMs = 6000;
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const resp = await fetch(targetUrl, {
+      method: 'GET',
+      mode: 'no-cors',
+      cache: 'no-store',
+      credentials: 'omit',
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+
+    const elapsed =
+      (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt;
+    const latencyMs = Math.max(1, Math.round(elapsed));
+
+    try {
+      await resp.body?.cancel();
+    } catch {
+      // Ignore stream cancel errors
+    }
+
+    if (resp.type !== 'opaque' && resp.status > 0) {
+      if (resp.status === 404) {
+        return {
+          status: 'unreachable',
+          httpStatus: 404,
+          latencyMs,
+          message: `返回 404，请核对入口路径是否正确 (${latencyMs} ms)`,
+          checkedAt: new Date().toISOString(),
+        };
+      }
+      return {
+        status: 'reachable',
+        httpStatus: resp.status,
+        latencyMs,
+        message: `客户端直连可达 · HTTP ${resp.status} (${latencyMs} ms)`,
+        checkedAt: new Date().toISOString(),
+      };
+    }
+
+    return {
+      status: 'reachable',
+      latencyMs,
+      message: `客户端直连可达 (${latencyMs} ms)`,
+      checkedAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    const elapsed =
+      (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt;
+    const latencyMs = Math.max(1, Math.round(elapsed));
+    const isAborted =
+      controller.signal.aborted || (err instanceof Error && err.name === 'AbortError');
+
+    if (isAborted) {
+      return {
+        status: 'unreachable',
+        latencyMs,
+        message: '客户端连接超时 (6s)',
+        checkedAt: new Date().toISOString(),
+      };
+    }
+
+    const isHttpsPage =
+      typeof window !== 'undefined' && window.location.protocol === 'https:';
+    const isLocalHost =
+      parsed.hostname === 'localhost' ||
+      parsed.hostname === '127.0.0.1' ||
+      parsed.hostname === '[::1]';
+
+    if (isHttpsPage && parsed.protocol === 'http:' && !isLocalHost) {
+      return {
+        status: 'unreachable',
+        latencyMs,
+        message:
+          '当前为 HTTPS 页面，受浏览器混合内容限制无法探测 HTTP 目标，请点击卡片直接打开验证',
+        checkedAt: new Date().toISOString(),
+      };
+    }
+
+    if (parsed.protocol === 'https:') {
+      return {
+        status: 'unreachable',
+        latencyMs,
+        message:
+          '客户端无法建立连接（可能是地址不可达、网络断开或自签名 HTTPS 证书尚未被浏览器信任）',
+        checkedAt: new Date().toISOString(),
+      };
+    }
+
+    return {
+      status: 'unreachable',
+      latencyMs,
+      message: '客户端无法连接到目标地址，请检查网络、端口或浏览器拦截策略',
+      checkedAt: new Date().toISOString(),
+    };
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 export async function fetchPublicWorkspaceByRoute(
@@ -202,6 +327,7 @@ export async function removePublicWorkspace(workspaceId: string): Promise<void> 
 
 export interface PersistedWorkspaceState {
   activeWorkspaceId?: string;
+  viewMode?: ViewMode;
   workspaces: Workspace[];
   nodes: import('../types/panel').PanelNode[];
   updatedAt?: string;
@@ -232,6 +358,7 @@ export async function fetchAdminState(): Promise<{
 
 export async function saveAdminState(payload: {
   activeWorkspaceId?: string;
+  viewMode?: ViewMode;
   workspaces: Workspace[];
   nodes: import('../types/panel').PanelNode[];
 }): Promise<{ ok: boolean; unauthorized?: boolean; message?: string }> {

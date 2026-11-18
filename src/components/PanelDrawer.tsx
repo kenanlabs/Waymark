@@ -1,9 +1,21 @@
-import { useEffect, useId, useMemo, useState } from 'react';
-import { Activity, Bookmark, ChevronDown, Eye, EyeOff, Loader2, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import {
+  Activity,
+  Bookmark,
+  Check,
+  ChevronDown,
+  Copy,
+  Eye,
+  EyeOff,
+  Loader2,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { GroupCombobox } from './CustomSelect';
 import type { PanelNode, PanelProbeResult, Workspace } from '../types/panel';
 import { probePanelNode } from '../utils/auth';
+import { copyTextToClipboard } from '../utils/crypto';
 import {
   buildPanelTargetUrl,
   buildSingleNodeBookmarklet,
@@ -52,6 +64,7 @@ export function PanelDrawer({
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<PanelProbeResult | null>(null);
+  const [copiedBookmarklet, setCopiedBookmarklet] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -163,7 +176,7 @@ export function PanelDrawer({
     } catch {
       setProbeResult({
         status: 'unreachable',
-        message: '请求探测服务失败，请确认本地后端服务正在运行后重试。',
+        message: '浏览器连通性探测异常，请检查网络或目标地址后重试。',
         checkedAt: new Date().toISOString(),
       });
     } finally {
@@ -218,6 +231,27 @@ export function PanelDrawer({
     editingNode && (editingNode.username || editingNode.password)
       ? buildSingleNodeBookmarklet(editingNode)
       : '';
+
+  const setBookmarkletAnchorRef = useCallback(
+    (el: HTMLAnchorElement | null) => {
+      if (!el) return;
+      if (bookmarkletHref) {
+        el.setAttribute('href', bookmarkletHref);
+      } else {
+        el.removeAttribute('href');
+      }
+    },
+    [bookmarkletHref]
+  );
+
+  const handleCopyBookmarklet = async () => {
+    if (!bookmarkletHref) return;
+    const ok = await copyTextToClipboard(bookmarkletHref);
+    if (ok) {
+      setCopiedBookmarklet(true);
+      window.setTimeout(() => setCopiedBookmarklet(false), 1500);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -640,20 +674,40 @@ export function PanelDrawer({
               </div>
 
               {editingNode && bookmarkletHref && (
-                <div className="pt-3 border-t border-[#E4E4E7] dark:border-[#27272A] flex items-center justify-between gap-3">
+                <div className="pt-3 border-t border-[#E4E4E7] dark:border-[#27272A] flex flex-wrap items-center justify-between gap-2.5">
                   <div className="text-xs text-[#71717A]">
-                    无插件备选：拖拽右侧书签到书签栏，登录页点击即可填充
+                    无插件备选：拖拽右侧书签到书签栏（或复制代码保存为书签），登录页点击即可填充
                   </div>
-                  <a
-                    href={bookmarkletHref}
-                    onClick={(e) => e.preventDefault()}
-                    draggable
-                    title="拖拽此按钮到浏览器书签栏"
-                    className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-medium border border-[#E4E4E7] dark:border-[#27272A] rounded-lg bg-[#FAFAFA] dark:bg-[#18181B] text-[#09090B] dark:text-white whitespace-nowrap shrink-0 cursor-grab"
-                  >
-                    <Bookmark className="w-3 h-3" aria-hidden="true" />
-                    <span>填充 · {editingNode.name}</span>
-                  </a>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <a
+                      ref={setBookmarkletAnchorRef}
+                      onClick={(e) => e.preventDefault()}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/uri-list', bookmarkletHref);
+                        e.dataTransfer.setData('text/plain', bookmarkletHref);
+                      }}
+                      draggable
+                      title="拖拽此按钮到浏览器书签栏"
+                      className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-medium border border-[#E4E4E7] dark:border-[#27272A] rounded-lg bg-[#FAFAFA] dark:bg-[#18181B] text-[#09090B] dark:text-white whitespace-nowrap cursor-grab select-none"
+                    >
+                      <Bookmark className="w-3 h-3" aria-hidden="true" />
+                      <span>填充 · {editingNode.name}</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={handleCopyBookmarklet}
+                      title="复制书签脚本代码"
+                      aria-label="复制书签脚本代码"
+                      className="inline-flex items-center gap-1 h-8 px-2.5 text-xs border border-[#E4E4E7] dark:border-[#27272A] rounded-lg bg-white dark:bg-[#111113] hover:bg-[#F4F4F5] dark:hover:bg-[#1F1F23] text-[#52525B] dark:text-[#A1A1AA] transition-colors"
+                    >
+                      {copiedBookmarklet ? (
+                        <Check className="w-3 h-3 text-[#16A34A]" aria-hidden="true" />
+                      ) : (
+                        <Copy className="w-3 h-3" aria-hidden="true" />
+                      )}
+                      <span>{copiedBookmarklet ? '已复制' : '复制代码'}</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </form>
