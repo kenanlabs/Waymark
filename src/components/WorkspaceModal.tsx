@@ -381,7 +381,7 @@ export function WorkspaceModal({
                     onClick={() => setIsPublic((v) => !v)}
                     className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white focus-visible:ring-offset-1 ${
                       isPublic
-                        ? 'bg-[#09090B] dark:bg-[#FAFAFA] border-[#09090B] dark:border-[#FAFAFA]'
+                        ? 'wm-switch-on'
                         : 'bg-[#E4E4E7] dark:bg-[#27272A] border-[#D4D4D8] dark:border-[#3F3F46]'
                     }`}
                   >
@@ -389,7 +389,7 @@ export function WorkspaceModal({
                       layout
                       transition={{ type: 'spring', stiffness: 540, damping: 34 }}
                       aria-hidden="true"
-                      className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white dark:bg-[#09090B] shadow-sm ${
+                      className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm ${
                         isPublic ? 'translate-x-[18px]' : 'translate-x-[2px]'
                       }`}
                     />
@@ -568,7 +568,7 @@ export function WorkspaceModal({
                   type="submit"
                   form={uid}
                   disabled={saving}
-                  className="h-8 px-4 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] dark:hover:bg-[#E4E4E7] rounded-lg shadow-[0_1px_2px_rgba(0,0,0,0.08)] transition-colors disabled:opacity-50"
+                  className="wm-btn-primary h-8 px-4 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
                 >
                   {saving ? '保存中...' : editingWorkspace ? '保存设置' : '创建空间'}
                 </button>

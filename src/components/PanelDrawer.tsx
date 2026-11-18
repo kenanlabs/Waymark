@@ -526,7 +526,7 @@ export function PanelDrawer({
                     onClick={() => setAutoFill((v) => !v)}
                     className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white focus-visible:ring-offset-1 ${
                       autoFill
-                        ? 'bg-[#09090B] dark:bg-[#FAFAFA] border-[#09090B] dark:border-[#FAFAFA]'
+                        ? 'wm-switch-on'
                         : 'bg-[#E4E4E7] dark:bg-[#27272A] border-[#D4D4D8] dark:border-[#3F3F46]'
                     }`}
                   >
@@ -534,7 +534,7 @@ export function PanelDrawer({
                       layout
                       transition={{ type: 'spring', stiffness: 540, damping: 34 }}
                       aria-hidden="true"
-                      className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white dark:bg-[#09090B] shadow-sm ${
+                      className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm ${
                         autoFill ? 'translate-x-[18px]' : 'translate-x-[2px]'
                       }`}
                     />
@@ -646,7 +646,7 @@ export function PanelDrawer({
                             onClick={() => setAutoSubmit((v) => !v)}
                             className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white focus-visible:ring-offset-1 ${
                               autoSubmit
-                                ? 'bg-[#09090B] dark:bg-[#FAFAFA] border-[#09090B] dark:border-[#FAFAFA]'
+                                ? 'wm-switch-on'
                                 : 'bg-[#E4E4E7] dark:bg-[#27272A] border-[#D4D4D8] dark:border-[#3F3F46]'
                             }`}
                           >
@@ -654,7 +654,7 @@ export function PanelDrawer({
                               layout
                               transition={{ type: 'spring', stiffness: 540, damping: 34 }}
                               aria-hidden="true"
-                              className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white dark:bg-[#09090B] shadow-sm ${
+                              className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm ${
                                 autoSubmit ? 'translate-x-[18px]' : 'translate-x-[2px]'
                               }`}
                             />
@@ -778,7 +778,7 @@ export function PanelDrawer({
                                 <button
                                   type="button"
                                   onClick={handleSaveFieldDefs}
-                                  className="h-8 px-3 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] dark:hover:bg-[#E4E4E7] rounded-lg transition-colors"
+                                  className="wm-btn-primary h-8 px-3 text-xs font-medium rounded-lg transition-colors"
                                 >
                                   保存字段配置并填写
                                 </button>
@@ -868,7 +868,7 @@ export function PanelDrawer({
                 <button
                   type="submit"
                   form={formId}
-                  className="h-8 px-4 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] dark:hover:bg-[#E4E4E7] rounded-lg shadow-[0_1px_2px_rgba(0,0,0,0.08)] transition-[background-color,transform] duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white focus-visible:ring-offset-2"
+                  className="wm-btn-primary h-8 px-4 text-xs font-medium rounded-lg transition-[background-color,transform] duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090B] dark:focus-visible:ring-white focus-visible:ring-offset-2"
                 >
                   {editingNode ? '保存更改' : '保存站点'}
                 </button>

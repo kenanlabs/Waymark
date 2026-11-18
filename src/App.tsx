@@ -62,8 +62,8 @@ import {
 
 const STORAGE_KEY = 'paneldeck_vault_v1';
 const THEME_KEY = 'paneldeck_theme_v1';
-const BG_TONE_KEY = 'waymark_bg_tone_v1';
-const BG_PATTERN_KEY = 'waymark_bg_pattern_v1';
+const BG_TONE_KEY = 'waymark_bg_tone_v2';
+const BG_PATTERN_KEY = 'waymark_bg_pattern_v2';
 const VIEW_MODE_KEY = 'waymark_view_mode_v1';
 const LEGACY_GROUPS_KEY = 'paneldeck_groups_v1';
 const WORKSPACES_STORAGE_KEY = 'opsdeck_workspaces_v1';
@@ -178,19 +178,19 @@ export default function App() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
   const [bgTone, setBgTone] = useState<BgTone>(() => {
-    if (typeof window === 'undefined') return 'paper';
+    if (typeof window === 'undefined') return 'pure';
     try {
       return normalizeBgTone(localStorage.getItem(BG_TONE_KEY));
     } catch {
-      return 'paper';
+      return 'pure';
     }
   });
   const [bgPattern, setBgPattern] = useState<BgPattern>(() => {
-    if (typeof window === 'undefined') return 'dots';
+    if (typeof window === 'undefined') return 'none';
     try {
       return normalizeBgPattern(localStorage.getItem(BG_PATTERN_KEY));
     } catch {
-      return 'dots';
+      return 'none';
     }
   });
 
@@ -1479,7 +1479,7 @@ export default function App() {
                       layoutId="group-tab-underline"
                       transition={{ type: 'spring', stiffness: 480, damping: 36 }}
                       aria-hidden="true"
-                      className="absolute inset-x-0 bottom-0 h-[2px] bg-[#09090B] dark:bg-[#FAFAFA]"
+                      className="absolute inset-x-0 bottom-0 h-[2px] bg-[var(--wm-switch-on)]"
                     />
                   )}
                 </button>
@@ -1508,7 +1508,7 @@ export default function App() {
                           layoutId="group-tab-underline"
                           transition={{ type: 'spring', stiffness: 480, damping: 36 }}
                           aria-hidden="true"
-                          className="absolute inset-x-0 bottom-0 h-[2px] bg-[#09090B] dark:bg-[#FAFAFA]"
+                          className="absolute inset-x-0 bottom-0 h-[2px] bg-[var(--wm-switch-on)]"
                         />
                       )}
                     </button>
@@ -1782,7 +1782,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.96 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed bottom-5 right-5 z-50 px-4 py-2.5 text-xs font-medium text-white bg-[#09090B] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-lg shadow-lg border border-black/[0.1] dark:border-white/[0.1]"
+            className="fixed bottom-5 right-5 z-50 px-4 py-2.5 text-xs font-medium text-[#09090B] dark:text-[#FAFAFA] bg-white dark:bg-[#1E1E24] rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.10)] dark:shadow-[0_10px_28px_rgba(0,0,0,0.45)] border border-[#E4E4E7] dark:border-[#32323A]"
           >
             {toastMessage}
           </motion.div>

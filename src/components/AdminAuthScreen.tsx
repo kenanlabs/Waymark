@@ -175,7 +175,7 @@ export function AdminAuthScreen({ initialized, onAuthenticated }: AdminAuthScree
             type="submit"
             whileTap={{ scale: 0.98 }}
             disabled={submitting}
-            className="w-full h-9 inline-flex items-center justify-center gap-2 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] dark:hover:bg-[#E4E4E7] rounded-lg shadow-[0_1px_2px_rgba(0,0,0,0.08)] transition-colors disabled:opacity-50"
+            className="wm-btn-primary w-full h-9 inline-flex items-center justify-center gap-2 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
           >
             {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
             <span>

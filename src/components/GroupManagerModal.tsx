@@ -101,7 +101,7 @@ export function GroupManagerModal({
                 <button
                   type="submit"
                   disabled={!newName.trim()}
-                  className="inline-flex items-center gap-1 h-9 px-3.5 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-lg disabled:opacity-40 transition-colors shrink-0"
+                  className="wm-btn-primary inline-flex items-center gap-1 h-9 px-3.5 text-xs font-medium rounded-lg disabled:opacity-40 transition-colors shrink-0"
                 >
                   <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>新建</span>

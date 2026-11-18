@@ -28,6 +28,19 @@ export interface BgTonePreset {
 
 export const BG_TONE_PRESETS: BgTonePreset[] = [
   {
+    id: 'pure',
+    name: '纯净默认',
+    subtitle: '经典纯白与深炭黑',
+    lightCanvas: '#FAFAFA',
+    lightSurface: '#FFFFFF',
+    lightMuted: '#F4F4F5',
+    lightBorder: '#E4E4E7',
+    darkCanvas: '#09090B',
+    darkSurface: '#111113',
+    darkMuted: '#18181B',
+    darkBorder: '#27272A',
+  },
+  {
     id: 'paper',
     name: '柔光暖纸',
     subtitle: '微暖米白纸感底色',
@@ -92,19 +105,6 @@ export const BG_TONE_PRESETS: BgTonePreset[] = [
     darkMuted: '#17202D',
     darkBorder: '#232F40',
   },
-  {
-    id: 'pure',
-    name: '纯净默认',
-    subtitle: '经典纯白与深炭黑',
-    lightCanvas: '#FAFAFA',
-    lightSurface: '#FFFFFF',
-    lightMuted: '#F4F4F5',
-    lightBorder: '#E4E4E7',
-    darkCanvas: '#09090B',
-    darkSurface: '#111113',
-    darkMuted: '#18181B',
-    darkBorder: '#27272A',
-  },
 ];
 
 export function normalizeBgTone(raw?: unknown): BgTone {
@@ -118,7 +118,7 @@ export function normalizeBgTone(raw?: unknown): BgTone {
   ) {
     return raw;
   }
-  return 'paper';
+  return 'pure';
 }
 
 export interface BgPatternPreset {
@@ -128,6 +128,11 @@ export interface BgPatternPreset {
 }
 
 export const BG_PATTERN_PRESETS: BgPatternPreset[] = [
+  {
+    id: 'none',
+    name: '纯色无纹',
+    subtitle: '不叠加任何背景纹理',
+  },
   {
     id: 'dots',
     name: '圆点矩阵',
@@ -153,11 +158,6 @@ export const BG_PATTERN_PRESETS: BgPatternPreset[] = [
     name: '圆弧几何',
     subtitle: '顶部同心圆弧点缀',
   },
-  {
-    id: 'none',
-    name: '纯色无纹',
-    subtitle: '不叠加任何背景纹理',
-  },
 ];
 
 export function normalizeBgPattern(raw?: unknown): BgPattern {
@@ -171,7 +171,7 @@ export function normalizeBgPattern(raw?: unknown): BgPattern {
   ) {
     return raw;
   }
-  return 'dots';
+  return 'none';
 }
 
 export const FIXED_CUSTOM_FIELD_KEYS: CustomFieldKey[] = ['field1', 'field2', 'field3'];

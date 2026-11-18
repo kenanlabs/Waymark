@@ -137,13 +137,13 @@ export function CustomSelect<T extends string = string>({
                     }}
                     className={`w-full flex items-center justify-between gap-3 px-3 py-1.5 text-[12px] text-left transition-colors ${
                       isHighlighted
-                        ? 'bg-[#F4F4F5] dark:bg-[#232329] text-[#09090B] dark:text-white'
+                        ? 'bg-[var(--wm-select-bg)] text-[#09090B] dark:text-white'
                         : 'text-[#52525B] dark:text-[#A1A1AA]'
                     } ${isSelected ? 'font-medium text-[#09090B] dark:text-white' : ''}`}
                   >
                     <span className="truncate">{opt.label}</span>
                     {isSelected && (
-                      <Check className="w-3.5 h-3.5 text-[#09090B] dark:text-white shrink-0" aria-hidden="true" />
+                      <Check className="w-3.5 h-3.5 text-[var(--wm-accent-ink)] shrink-0" aria-hidden="true" />
                     )}
                   </button>
                 </li>
@@ -310,13 +310,13 @@ export function GroupCombobox({
                     }}
                     className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
                       isHighlighted
-                        ? 'bg-[#F4F4F5] dark:bg-[#232329] text-[#09090B] dark:text-white'
+                        ? 'bg-[var(--wm-select-bg)] text-[#09090B] dark:text-white'
                         : 'text-[#52525B] dark:text-[#A1A1AA]'
                     } ${isSelected ? 'font-medium text-[#09090B] dark:text-white' : ''}`}
                   >
                     <span className="truncate">{option}</span>
                     {isSelected && (
-                      <Check className="w-3.5 h-3.5 text-[#09090B] dark:text-white shrink-0" aria-hidden="true" />
+                      <Check className="w-3.5 h-3.5 text-[var(--wm-accent-ink)] shrink-0" aria-hidden="true" />
                     )}
                   </button>
                 </li>

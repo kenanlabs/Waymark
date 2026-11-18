@@ -84,7 +84,7 @@ export function VaultLockScreen({ onUnlock }: VaultLockScreenProps) {
             type="submit"
             whileTap={{ scale: 0.98 }}
             disabled={submitting}
-            className="w-full inline-flex items-center justify-center gap-2 py-2 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-lg transition-colors disabled:opacity-50"
+            className="wm-btn-primary w-full inline-flex items-center justify-center gap-2 py-2 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
           >
             {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
             <span>{submitting ? '正在解密...' : '解锁进入'}</span>

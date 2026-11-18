@@ -424,7 +424,7 @@ export function SettingsModal({
                           layoutId="settings-tab-underline"
                           transition={{ type: 'spring', stiffness: 480, damping: 36 }}
                           aria-hidden="true"
-                          className="absolute inset-x-0 bottom-0 h-[2px] bg-[#09090B] dark:bg-[#FAFAFA]"
+                          className="absolute inset-x-0 bottom-0 h-[2px] bg-[var(--wm-switch-on)]"
                         />
                       )}
                     </button>
@@ -471,7 +471,7 @@ export function SettingsModal({
                             aria-pressed={theme === 'light'}
                             className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-left transition-all ${
                               theme === 'light'
-                                ? 'border-[#09090B] dark:border-[#FAFAFA] ring-1 ring-inset ring-[#09090B] dark:ring-[#FAFAFA] bg-[#FAFAFA] dark:bg-[#18181B]'
+                                ? 'wm-card-selected'
                                 : 'border-[#E4E4E7] dark:border-[#27272A] hover:border-[#A1A1AA] dark:hover:border-[#3F3F46]'
                             }`}
                           >
@@ -482,7 +482,7 @@ export function SettingsModal({
                               </span>
                             </div>
                             {theme === 'light' && (
-                              <Check className="w-3.5 h-3.5 text-[#09090B] dark:text-[#FAFAFA] shrink-0" aria-hidden="true" />
+                              <Check className="w-3.5 h-3.5 text-[var(--wm-accent-ink)] shrink-0" aria-hidden="true" />
                             )}
                           </button>
 
@@ -492,7 +492,7 @@ export function SettingsModal({
                             aria-pressed={theme === 'dark'}
                             className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-left transition-all ${
                               theme === 'dark'
-                                ? 'border-[#09090B] dark:border-[#FAFAFA] ring-1 ring-inset ring-[#09090B] dark:ring-[#FAFAFA] bg-[#FAFAFA] dark:bg-[#18181B]'
+                                ? 'wm-card-selected'
                                 : 'border-[#E4E4E7] dark:border-[#27272A] hover:border-[#A1A1AA] dark:hover:border-[#3F3F46]'
                             }`}
                           >
@@ -503,7 +503,7 @@ export function SettingsModal({
                               </span>
                             </div>
                             {theme === 'dark' && (
-                              <Check className="w-3.5 h-3.5 text-[#09090B] dark:text-[#FAFAFA] shrink-0" aria-hidden="true" />
+                              <Check className="w-3.5 h-3.5 text-[var(--wm-accent-ink)] shrink-0" aria-hidden="true" />
                             )}
                           </button>
                         </div>
@@ -531,7 +531,7 @@ export function SettingsModal({
                                 aria-pressed={active}
                                 className={`group flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
                                   active
-                                    ? 'border-[#09090B] dark:border-[#FAFAFA] ring-1 ring-inset ring-[#09090B] dark:ring-[#FAFAFA] bg-[#FAFAFA] dark:bg-[#18181B]'
+                                    ? 'wm-card-selected'
                                     : 'border-[#E4E4E7] dark:border-[#27272A] hover:border-[#A1A1AA] dark:hover:border-[#3F3F46]'
                                 }`}
                               >
@@ -563,7 +563,7 @@ export function SettingsModal({
                                     </span>
                                     {active && (
                                       <Check
-                                        className="w-3.5 h-3.5 text-[#09090B] dark:text-[#FAFAFA] shrink-0"
+                                        className="w-3.5 h-3.5 text-[var(--wm-accent-ink)] shrink-0"
                                         aria-hidden="true"
                                       />
                                     )}
@@ -602,7 +602,7 @@ export function SettingsModal({
                                 aria-pressed={active}
                                 className={`group flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
                                   active
-                                    ? 'border-[#09090B] dark:border-[#FAFAFA] ring-1 ring-inset ring-[#09090B] dark:ring-[#FAFAFA] bg-[#FAFAFA] dark:bg-[#18181B]'
+                                    ? 'wm-card-selected'
                                     : 'border-[#E4E4E7] dark:border-[#27272A] hover:border-[#A1A1AA] dark:hover:border-[#3F3F46]'
                                 }`}
                               >
@@ -623,7 +623,7 @@ export function SettingsModal({
                                     </span>
                                     {active && (
                                       <Check
-                                        className="w-3.5 h-3.5 text-[#09090B] dark:text-[#FAFAFA] shrink-0"
+                                        className="w-3.5 h-3.5 text-[var(--wm-accent-ink)] shrink-0"
                                         aria-hidden="true"
                                       />
                                     )}
@@ -682,7 +682,7 @@ export function SettingsModal({
                             download="waymark-extension.zip"
                             onClick={handleDownloadExtension}
                             aria-busy={downloadingExt}
-                            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] dark:hover:bg-[#E4E4E7] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                            className="wm-btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0"
                           >
                             {downloadingExt ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
@@ -899,7 +899,7 @@ export function SettingsModal({
                           type="button"
                           disabled={validCount === 0}
                           onClick={handleConfirmImport}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-lg disabled:opacity-40 transition-colors"
+                          className="wm-btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg disabled:opacity-40 transition-colors"
                         >
                           <Upload className="w-3.5 h-3.5" aria-hidden="true" />
                           <span>导入 {validCount} 个站点</span>
@@ -961,7 +961,7 @@ export function SettingsModal({
                             <button
                               type="submit"
                               disabled={updatingAdminPass}
-                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-[#09090B] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-lg disabled:opacity-50"
+                              className="wm-btn-primary inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg disabled:opacity-50 transition-colors"
                             >
                               <span>{updatingAdminPass ? '更新中...' : '修改管理员密码'}</span>
                             </button>
@@ -998,7 +998,7 @@ export function SettingsModal({
                                   onLockNow();
                                   onClose();
                                 }}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-[#09090B] text-white dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-md"
+                                className="wm-btn-primary inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
                               >
                                 <Lock className="w-3 h-3" />
                                 <span>立即锁定</span>
@@ -1041,7 +1041,7 @@ export function SettingsModal({
                             />
                             <button
                               type="submit"
-                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-[#09090B] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-lg"
+                              className="wm-btn-primary inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors"
                             >
                               <ShieldCheck className="w-3.5 h-3.5" />
                               <span>启用加密</span>
@@ -1070,7 +1070,7 @@ export function SettingsModal({
                             <button
                               type="button"
                               onClick={handleExportEncrypted}
-                              className="px-3 py-1.5 text-xs font-medium bg-[#09090B] text-white dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-lg shrink-0"
+                              className="wm-btn-primary px-3 py-1.5 text-xs font-medium rounded-lg shrink-0 transition-colors"
                             >
                               加密导出
                             </button>
