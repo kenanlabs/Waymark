@@ -21,6 +21,7 @@ export interface Workspace {
   isPublic?: boolean;
   publicRoute?: string;
   publicDomain?: string;
+  publicProtocol?: 'http' | 'https';
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +43,7 @@ export interface PublicWorkspaceViewData {
   description?: string;
   publicRoute: string;
   publicDomain?: string;
+  publicProtocol?: 'http' | 'https';
   updatedAt: string;
   nodes: PublicNodeItem[];
 }

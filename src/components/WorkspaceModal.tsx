@@ -1,11 +1,12 @@
 import { useEffect, useId, useState } from 'react';
-import { ArrowUpRight, Check, Copy, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Check, Copy, Eye, Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { Workspace } from '../types/panel';
 import { copyTextToClipboard } from '../utils/crypto';
 import {
   normalizePublicDomain,
   normalizePublicRoute,
+  parsePublicDomainInput,
   validatePublicDomain,
   validatePublicRoute,
 } from '../utils/workspacePresets';
@@ -24,6 +25,7 @@ interface WorkspaceModalProps {
       isPublic: boolean;
       publicRoute: string;
       publicDomain: string;
+      publicProtocol: 'http' | 'https';
     },
     existingId?: string
   ) => Promise<string | null> | string | null;
@@ -62,7 +64,15 @@ export function WorkspaceModal({
       setName(editingWorkspace.name);
       setDescription(editingWorkspace.description || '');
       setIsPublic(Boolean(editingWorkspace.isPublic));
-      setPublicDomain(editingWorkspace.publicDomain || '');
+      if (editingWorkspace.publicDomain) {
+        setPublicDomain(
+          editingWorkspace.publicProtocol === 'http'
+            ? `http://${editingWorkspace.publicDomain}`
+            : editingWorkspace.publicDomain
+        );
+      } else {
+        setPublicDomain('');
+      }
       setPublicRoute(editingWorkspace.publicRoute || '');
     } else {
       setName('');
@@ -73,18 +83,29 @@ export function WorkspaceModal({
     }
   }, [open, editingWorkspace]);
 
-  const normalizedPreviewDomain = normalizePublicDomain(publicDomain);
+  const { protocol: previewProtocol, domain: normalizedPreviewDomain } =
+    parsePublicDomainInput(publicDomain);
   const normalizedPreviewRoute = normalizePublicRoute(publicRoute);
-  const fullPublicUrl =
-    typeof window !== 'undefined'
+  const fullPublicUrl = normalizedPreviewDomain
+    ? `${previewProtocol}://${normalizedPreviewDomain}${normalizedPreviewRoute || '/'}`
+    : normalizedPreviewRoute
+      ? `${typeof window !== 'undefined' ? window.location.origin : ''}${normalizedPreviewRoute}`
+      : '';
+
+  const isSavedPublicUnchanged = Boolean(
+    editingWorkspace?.isPublic &&
+      isPublic &&
+      (editingWorkspace.publicRoute || '') === normalizedPreviewRoute &&
+      (editingWorkspace.publicDomain || '') === normalizedPreviewDomain &&
+      (editingWorkspace.publicProtocol || 'https') === previewProtocol
+  );
+
+  const previewTargetHref =
+    editingWorkspace && isSavedPublicUnchanged
       ? normalizedPreviewDomain
-        ? `${window.location.protocol}//${normalizedPreviewDomain}${normalizedPreviewRoute || '/'}`
-        : normalizedPreviewRoute
-          ? `${window.location.origin}${normalizedPreviewRoute}`
-          : ''
-      : normalizedPreviewDomain
-        ? `https://${normalizedPreviewDomain}${normalizedPreviewRoute || '/'}`
-        : normalizedPreviewRoute;
+        ? `/?preview=${encodeURIComponent(editingWorkspace.id)}`
+        : fullPublicUrl
+      : '';
 
   const isCurrentHostRootConflict =
     typeof window !== 'undefined' &&
@@ -111,9 +132,12 @@ export function WorkspaceModal({
     }
 
     let finalDomain = '';
+    let finalProtocol: 'http' | 'https' = 'https';
     let finalRoute = '';
     if (isPublic) {
-      finalDomain = normalizePublicDomain(publicDomain);
+      const parsedDomain = parsePublicDomainInput(publicDomain);
+      finalDomain = parsedDomain.domain;
+      finalProtocol = parsedDomain.protocol;
       const domainError = validatePublicDomain(finalDomain);
       if (domainError) {
         setErrorMsg(domainError);
@@ -159,6 +183,7 @@ export function WorkspaceModal({
         isPublic,
         publicRoute: finalRoute,
         publicDomain: finalDomain,
+        publicProtocol: finalProtocol,
       },
       editingWorkspace?.id
     );
@@ -198,7 +223,7 @@ export function WorkspaceModal({
                   {editingWorkspace ? '空间设置' : '新建工作空间'}
                 </h2>
                 <p className="mt-0.5 text-[12px] text-[#71717A] dark:text-[#A1A1AA]">
-                  自定义空间标题、描述及公开只读访问路由
+                  自定义空间标题、描述及公开访问方式
                 </p>
               </div>
               <button
@@ -234,7 +259,7 @@ export function WorkspaceModal({
                   autoFocus
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="例如：运维监控 / 开发工具 / 常用导航"
+                  placeholder="例如：工作台 / 设计资源 / 团队共享"
                   className="w-full h-9 px-3 text-[13px] bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
                 />
               </div>
@@ -266,7 +291,7 @@ export function WorkspaceModal({
                       公开访问该空间
                     </span>
                     <span className="block text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
-                      开启后可通过自定义路由免登录查看与跳转
+                      开启后可通过自定义路由或独立域名免登录查看与跳转
                     </span>
                   </div>
                   <button
@@ -307,7 +332,7 @@ export function WorkspaceModal({
                           htmlFor={`${uid}-domain`}
                           className="block text-xs font-medium text-[#27272A] dark:text-[#E4E4E7] mb-1.5"
                         >
-                          公开访问域名（可选）
+                          公开访问域名（可选，默认 https://）
                         </label>
                         <input
                           id={`${uid}-domain`}
@@ -315,7 +340,7 @@ export function WorkspaceModal({
                           spellCheck={false}
                           value={publicDomain}
                           onChange={(e) => setPublicDomain(e.target.value)}
-                          placeholder="例如：grafana.example.com"
+                          placeholder="例如：nav.example.com 或 http://nav.lan:3000"
                           className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
                         />
                         <p className="mt-1 text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
@@ -341,7 +366,7 @@ export function WorkspaceModal({
                           placeholder={
                             normalizedPreviewDomain
                               ? '留空则直接通过域名根目录 / 访问'
-                              : '/grafana 或 /team/ops'
+                              : '/team 或 /share/links'
                           }
                           className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
                         />
@@ -354,37 +379,57 @@ export function WorkspaceModal({
                       )}
 
                       {fullPublicUrl && (
-                        <div className="px-3 py-2 bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg flex items-center justify-between gap-2">
-                          <span className="font-mono text-[11px] text-[#52525B] dark:text-[#A1A1AA] truncate">
-                            {fullPublicUrl}
-                          </span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={handleCopyPublicUrl}
-                              aria-label="复制公开访问地址"
-                              className="p-1 text-[#71717A] hover:text-[#09090B] dark:hover:text-white rounded"
-                            >
-                              {copiedUrl ? (
-                                <Check className="w-3.5 h-3.5 text-[#16A34A]" aria-hidden="true" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-                              )}
-                            </button>
-                            {editingWorkspace?.isPublic &&
-                              (editingWorkspace.publicRoute || '') === normalizedPreviewRoute &&
-                              (editingWorkspace.publicDomain || '') === normalizedPreviewDomain && (
+                        <div className="px-3 py-2 bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-[11px] text-[#52525B] dark:text-[#A1A1AA] truncate">
+                              {fullPublicUrl}
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={handleCopyPublicUrl}
+                                aria-label="复制公开访问地址"
+                                title="复制地址"
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-[#52525B] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white hover:bg-white dark:hover:bg-[#27272A] rounded-md transition-colors"
+                              >
+                                {copiedUrl ? (
+                                  <Check className="w-3 h-3 text-[#16A34A]" aria-hidden="true" />
+                                ) : (
+                                  <Copy className="w-3 h-3" aria-hidden="true" />
+                                )}
+                                <span>{copiedUrl ? '已复制' : '复制'}</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {isSavedPublicUnchanged ? (
+                            <div className="flex items-center justify-end gap-2 pt-1.5 border-t border-[#E4E4E7]/70 dark:border-[#27272A]/70">
+                              {normalizedPreviewDomain && previewTargetHref && (
                                 <a
-                                  href={fullPublicUrl}
+                                  href={previewTargetHref}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  aria-label="预览公开空间"
-                                  className="p-1 text-[#71717A] hover:text-[#09090B] dark:hover:text-white rounded"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-[#52525B] dark:text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-white bg-white dark:bg-[#111113] border border-[#E4E4E7] dark:border-[#27272A] rounded-md transition-colors"
                                 >
-                                  <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
+                                  <Eye className="w-3 h-3" aria-hidden="true" />
+                                  <span>本地预览</span>
                                 </a>
                               )}
-                          </div>
+                              <a
+                                href={fullPublicUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-[#09090B] dark:text-[#FAFAFA] bg-white dark:bg-[#111113] border border-[#E4E4E7] dark:border-[#27272A] hover:border-[#A1A1AA] dark:hover:border-[#3F3F46] rounded-md transition-colors"
+                              >
+                                <span>跳转公开页</span>
+                                <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+                              </a>
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
+                              保存设置后可直接预览或跳转该公开访问页面
+                            </p>
+                          )}
                         </div>
                       )}
 

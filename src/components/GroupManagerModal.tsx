@@ -68,7 +68,7 @@ export function GroupManagerModal({
                   id={`${uid}-title`}
                   className="font-display text-[15px] font-semibold text-[#09090B] dark:text-[#FAFAFA]"
                 >
-                  管理环境分组
+                  管理分组
                 </h2>
                 <p className="mt-0.5 text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
                   重命名将同步更新该组内所有站点；删除分组后站点保留并移入「默认分组」
@@ -94,7 +94,7 @@ export function GroupManagerModal({
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="输入新分组名称（例如：客户生产环境）"
+                  placeholder="输入新分组名称"
                   className="flex-1 h-9 px-3 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
                 />
                 <button

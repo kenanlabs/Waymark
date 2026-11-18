@@ -154,9 +154,14 @@ export async function probePanelNode(params: {
 }
 
 export async function fetchPublicWorkspaceByRoute(
-  route: string
+  route: string,
+  previewId?: string
 ): Promise<{ ok: boolean; workspace?: PublicWorkspaceViewData; message?: string }> {
-  const resp = await fetch(`/api/public/workspace?route=${encodeURIComponent(route)}`);
+  const params = new URLSearchParams({ route });
+  if (previewId) {
+    params.set('previewId', previewId);
+  }
+  const resp = await fetch(`/api/public/workspace?${params.toString()}`);
   return (await resp.json()) as {
     ok: boolean;
     workspace?: PublicWorkspaceViewData;
@@ -180,6 +185,7 @@ export async function syncPublicWorkspace(
       description: workspace.description || '',
       publicRoute: workspace.publicRoute || '',
       publicDomain: workspace.publicDomain || '',
+      publicProtocol: workspace.publicProtocol || 'https',
       nodes,
     }),
   });

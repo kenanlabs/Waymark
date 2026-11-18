@@ -69,7 +69,7 @@ export function FirstPanelOnboarding({
   const handleTestProbe = async () => {
     const normalizedUrl = normalizeBaseUrl(baseUrl);
     if (!normalizedUrl) {
-      showError('请先填写访问地址（例如 https://console.example.com:8080）再进行测试。');
+      showError('请先填写访问地址（例如 https://portal.example.com）再进行测试。');
       return;
     }
     setErrorMsg('');
@@ -140,7 +140,7 @@ export function FirstPanelOnboarding({
   };
 
   const previewTarget = buildPanelTargetUrl({
-    baseUrl: normalizeBaseUrl(baseUrl) || 'https://console.example.com',
+    baseUrl: normalizeBaseUrl(baseUrl) || 'https://portal.example.com',
     entrance: normalizeEntrance(entrance),
   });
 
@@ -197,7 +197,7 @@ export function FirstPanelOnboarding({
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="例如：监控中心 / 代码仓库 / 路由器后台"
+              placeholder="例如：企业邮箱 / 文档中心 / 设计协作"
               className="w-full h-9 px-3 text-[13px] bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
             />
           </div>
@@ -217,7 +217,7 @@ export function FirstPanelOnboarding({
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
                 onBlur={handleUrlBlur}
-                placeholder="https://console.example.com:8080"
+                placeholder="https://portal.example.com"
                 className="w-full h-9 px-3 font-mono text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#09090B] dark:focus:ring-white"
               />
             </div>
@@ -283,14 +283,14 @@ export function FirstPanelOnboarding({
               htmlFor={`${formId}-group`}
               className="block text-xs font-medium text-[#27272A] dark:text-[#E4E4E7] mb-1.5"
             >
-              环境分组
+              分组
             </label>
             <GroupCombobox
               id={`${formId}-group`}
               value={group}
               onChange={setGroup}
               suggestions={groupSuggestions}
-              placeholder={groupSuggestions[0] || '默认分组'}
+              placeholder="选择或输入自定义分组"
             />
           </div>
 

@@ -33,6 +33,7 @@ interface PublicWorkspaceRecord {
   description?: string;
   publicRoute: string;
   publicDomain?: string;
+  publicProtocol?: 'http' | 'https';
   updatedAt: string;
   nodes: PublicNodeItem[];
 }
@@ -70,6 +71,7 @@ const RESERVED_PUBLIC_PREFIXES = [
   '/opsdeck-bridge.user.js',
   '/1panel-bridge.user.js',
   '/favicon.ico',
+  '/favicon.svg',
 ];
 
 function normalizePublicRoute(raw: string): string {
@@ -552,17 +554,23 @@ async function startServer(): Promise<void> {
 
   // Public Workspace read endpoint (NO auth required, strictly zero credentials/sensitive fields)
   app.get('/api/public/workspace', (req, res) => {
+    const previewId = String(req.query.previewId || '').trim();
     const routeParam = normalizePublicRoute(String(req.query.route || ''));
     const effectiveRoute = routeParam || '/';
     const reqHost = getRequestHost(req);
-    const list = Object.values(readPublicWorkspaces());
+    const all = readPublicWorkspaces();
+    const list = Object.values(all);
 
-    let match = list.find(
-      (ws) =>
-        ws.publicDomain &&
-        hostMatchesDomain(reqHost, ws.publicDomain) &&
-        (ws.publicRoute || '/').toLowerCase() === effectiveRoute.toLowerCase()
-    );
+    let match = previewId ? all[previewId] : undefined;
+
+    if (!match) {
+      match = list.find(
+        (ws) =>
+          ws.publicDomain &&
+          hostMatchesDomain(reqHost, ws.publicDomain) &&
+          (ws.publicRoute || '/').toLowerCase() === effectiveRoute.toLowerCase()
+      );
+    }
 
     if (!match && effectiveRoute === '/') {
       match = list.find((ws) => ws.publicDomain && hostMatchesDomain(reqHost, ws.publicDomain));
@@ -593,6 +601,7 @@ async function startServer(): Promise<void> {
         description: match.description || '',
         publicRoute: match.publicRoute || '',
         publicDomain: match.publicDomain || '',
+        publicProtocol: match.publicProtocol || 'https',
         updatedAt: match.updatedAt,
         nodes: match.nodes.map((n) => ({
           id: n.id,
@@ -621,19 +630,21 @@ async function startServer(): Promise<void> {
       description?: string;
       publicRoute?: string;
       publicDomain?: string;
+      publicProtocol?: string;
       nodes?: Array<Record<string, unknown>>;
     };
 
     const name = String(body?.name || '').trim();
     const publicRoute = normalizePublicRoute(String(body?.publicRoute || ''));
     const publicDomain = normalizePublicDomain(String(body?.publicDomain || ''));
+    const publicProtocol: 'http' | 'https' = body?.publicProtocol === 'http' ? 'http' : 'https';
 
     if (!name) {
       res.status(400).json({ ok: false, message: '工作空间标题不能为空' });
       return;
     }
     if (publicDomain && !isValidPublicDomain(publicDomain)) {
-      res.status(400).json({ ok: false, message: '公开访问域名格式无效，请填写如 grafana.example.com' });
+      res.status(400).json({ ok: false, message: '公开访问域名格式无效，请填写如 nav.example.com' });
       return;
     }
     if (!publicDomain && !publicRoute) {
@@ -641,7 +652,7 @@ async function startServer(): Promise<void> {
       return;
     }
     if (publicRoute && !/^\/[a-zA-Z0-9/_-]+$/.test(publicRoute)) {
-      res.status(400).json({ ok: false, message: '公开路由格式无效，请使用如 /grafana 的路径' });
+      res.status(400).json({ ok: false, message: '公开路由格式无效，请使用如 /team 的路径' });
       return;
     }
     if (publicRoute && isReservedPublicRoute(publicRoute)) {
@@ -699,6 +710,7 @@ async function startServer(): Promise<void> {
       description: String(body?.description || '').trim() || undefined,
       publicRoute,
       publicDomain: publicDomain || undefined,
+      publicProtocol: publicDomain ? publicProtocol : undefined,
       updatedAt: new Date().toISOString(),
       nodes: sanitizedNodes,
     };

@@ -98,6 +98,10 @@ export default function App() {
     const trimmed = window.location.pathname.replace(/\/+$/, '');
     return trimmed || '/';
   }, []);
+  const previewWorkspaceId = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('preview')?.trim() || '';
+  }, []);
   const [publicMode, setPublicMode] = useState<'checking' | 'public' | 'admin'>('checking');
   const [publicWorkspace, setPublicWorkspace] = useState<PublicWorkspaceViewData | null>(null);
   const [publicError, setPublicError] = useState<string | undefined>(undefined);
@@ -180,17 +184,17 @@ export default function App() {
     );
   }, [publicMode, activeWorkspaceId, workspaces]);
 
-  // Isolated public entry check (checks both custom Host domain and custom route path before any admin logic)
+  // Isolated public entry check (checks preview query, custom Host domain, and custom route path before any admin logic)
   useEffect(() => {
     let cancelled = false;
-    fetchPublicWorkspaceByRoute(currentPath)
+    fetchPublicWorkspaceByRoute(currentPath, previewWorkspaceId || undefined)
       .then((res) => {
         if (cancelled) return;
         if (res.ok && res.workspace) {
           setPublicWorkspace(res.workspace);
           setPublicError(undefined);
           setPublicMode('public');
-        } else if (currentPath !== '/') {
+        } else if (currentPath !== '/' || previewWorkspaceId) {
           setPublicWorkspace(null);
           setPublicError(res.message || '未找到对应的公开工作空间');
           setPublicMode('public');
@@ -200,7 +204,7 @@ export default function App() {
       })
       .catch(() => {
         if (cancelled) return;
-        if (currentPath !== '/') {
+        if (currentPath !== '/' || previewWorkspaceId) {
           setPublicWorkspace(null);
           setPublicError('加载公开工作空间失败');
           setPublicMode('public');
@@ -211,7 +215,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [currentPath]);
+  }, [currentPath, previewWorkspaceId]);
 
   // Verify admin auth session on mount (admin mode only)
   useEffect(() => {
@@ -413,6 +417,7 @@ export default function App() {
           description: ws.description || '',
           publicRoute: ws.publicRoute || '',
           publicDomain: ws.publicDomain || '',
+          publicProtocol: ws.publicProtocol || 'https',
           nodes: publicNodes,
         });
         if (lastSyncedPublicRef.current[ws.id] !== signature) {
@@ -618,6 +623,7 @@ export default function App() {
       isPublic: boolean;
       publicRoute: string;
       publicDomain: string;
+      publicProtocol: 'http' | 'https';
     },
     existingId?: string
   ): Promise<string | null> => {
@@ -632,6 +638,7 @@ export default function App() {
         isPublic: data.isPublic,
         publicRoute: data.isPublic ? data.publicRoute : '',
         publicDomain: data.isPublic ? data.publicDomain : '',
+        publicProtocol: data.isPublic && data.publicDomain ? data.publicProtocol : undefined,
         updatedAt: now,
       };
       const nextWorkspaces = workspaces.map((ws) => (ws.id === existingId ? updatedWs : ws));
@@ -647,6 +654,7 @@ export default function App() {
           description: updatedWs.description || '',
           publicRoute: updatedWs.publicRoute || '',
           publicDomain: updatedWs.publicDomain || '',
+          publicProtocol: updatedWs.publicProtocol || 'https',
           nodes: publicNodes,
         });
       } else if (targetWs.isPublic) {
@@ -666,6 +674,7 @@ export default function App() {
         isPublic: data.isPublic,
         publicRoute: data.isPublic ? data.publicRoute : '',
         publicDomain: data.isPublic ? data.publicDomain : '',
+        publicProtocol: data.isPublic && data.publicDomain ? data.publicProtocol : undefined,
         createdAt: now,
         updatedAt: now,
       };
@@ -681,6 +690,7 @@ export default function App() {
           description: created.description || '',
           publicRoute: created.publicRoute || '',
           publicDomain: created.publicDomain || '',
+          publicProtocol: created.publicProtocol || 'https',
           nodes: [],
         });
       }
@@ -1014,7 +1024,7 @@ export default function App() {
           <div className="space-y-5">
             {/* Editorial underline group tabs + aligned view controls */}
             <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#E4E4E7] dark:border-[#27272A]">
-              <div className="flex items-center gap-6 overflow-x-auto no-scrollbar" role="tablist" aria-label="环境分组筛选">
+              <div className="flex items-center gap-6 overflow-x-auto no-scrollbar" role="tablist" aria-label="分组筛选">
                 <button
                   type="button"
                   role="tab"
@@ -1075,7 +1085,7 @@ export default function App() {
                   type="button"
                   onClick={() => setGroupManagerOpen(true)}
                   aria-label="管理分组"
-                  title="新建、重命名或删除环境分组"
+                  title="新建、重命名或删除分组"
                   className="inline-flex items-center gap-1 pb-3 text-[12px] text-[#A1A1AA] hover:text-[#09090B] dark:hover:text-[#FAFAFA] transition-colors whitespace-nowrap shrink-0"
                 >
                   <Pencil className="w-3 h-3" aria-hidden="true" />

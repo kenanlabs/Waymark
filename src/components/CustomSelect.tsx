@@ -151,7 +151,7 @@ export function GroupCombobox({
   value,
   suggestions,
   onChange,
-  placeholder = '生产环境',
+  placeholder = '输入或选择分组',
 }: GroupComboboxProps) {
   const [open, setOpen] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);

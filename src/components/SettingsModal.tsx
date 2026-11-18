@@ -45,9 +45,9 @@ interface SettingsModalProps {
   onNotify: (msg: string) => void;
 }
 
-const FORMAT_GUIDE_PLACEHOLDER = `Grafana 监控, https://grafana.example.com, admin, Pass123456, , 生产环境, 自建
-KubeSphere 集群, https://ks.example.com:30880, ops_user, KsPass#99, , 生产环境, AWS
-内网文档站, http://192.168.10.50:8080, , , /docs, 常用工具, 本地机房`;
+const FORMAT_GUIDE_PLACEHOLDER = `文档中心, https://docs.example.com, admin, Pass123456, , 办公协作, 自建
+团队网盘, https://drive.example.com, user01, DrivePass#99, , 资料库, 云服务
+本地知识库, http://192.168.10.50:8080, , , /wiki, 默认分组, 内网`;
 
 export function SettingsModal({
   open,
