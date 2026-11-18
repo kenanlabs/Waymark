@@ -8,15 +8,10 @@
 
 ## 界面预览
 
-> 将个人截图保存至 `docs/screenshots/` 目录（默认对应 `dashboard.png` 与 `public-view.png`），即可在文档中展示。
+![浅色模式](docs/screenshots/light.png)
 
-### 管理控制台
+![深色模式](docs/screenshots/dark.png)
 
-![Waymark 管理控制台](docs/screenshots/dashboard.png)
-
-### 公开工作空间
-
-![Waymark 公开工作空间](docs/screenshots/public-view.png)
 
 ---
 
