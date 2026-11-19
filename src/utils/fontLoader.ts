@@ -11,6 +11,8 @@ export interface FontPreset {
 }
 
 const FONT_CACHE_NAME = 'waymark-fonts-v1';
+const FONT_IDB_NAME = 'waymark-fonts-db-v1';
+const FONT_IDB_STORE = 'fonts';
 const loadedFontFamilies = new Set<FontFamily>(['default']);
 const inFlightDownloads = new Map<
   FontFamily,
@@ -67,6 +69,103 @@ function getCacheKeyUrl(fontId: FontFamily): string {
   return `https://waymark.local/__font_cache__/${fontId}.ttf`;
 }
 
+function openFontIdb(): Promise<IDBDatabase | null> {
+  if (typeof window === 'undefined' || !('indexedDB' in window)) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    try {
+      const req = window.indexedDB.open(FONT_IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(FONT_IDB_STORE)) {
+          db.createObjectStore(FONT_IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function readFontFromIdb(fontId: FontFamily): Promise<ArrayBuffer | null> {
+  const db = await openFontIdb();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(FONT_IDB_STORE, 'readonly');
+      const store = tx.objectStore(FONT_IDB_STORE);
+      const req = store.get(fontId);
+      req.onsuccess = () => {
+        db.close();
+        const res = req.result;
+        if (res instanceof ArrayBuffer && res.byteLength > 0) {
+          resolve(res);
+        } else if (res && res.buffer instanceof ArrayBuffer && res.byteLength > 0) {
+          resolve(res.buffer);
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => {
+        db.close();
+        resolve(null);
+      };
+    } catch {
+      db.close();
+      resolve(null);
+    }
+  });
+}
+
+async function hasFontInIdb(fontId: FontFamily): Promise<boolean> {
+  const db = await openFontIdb();
+  if (!db) return false;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(FONT_IDB_STORE, 'readonly');
+      const store = tx.objectStore(FONT_IDB_STORE);
+      const req = store.getKey(fontId);
+      req.onsuccess = () => {
+        db.close();
+        resolve(req.result !== undefined);
+      };
+      req.onerror = () => {
+        db.close();
+        resolve(false);
+      };
+    } catch {
+      db.close();
+      resolve(false);
+    }
+  });
+}
+
+async function writeFontToIdb(fontId: FontFamily, buffer: ArrayBuffer): Promise<void> {
+  const db = await openFontIdb();
+  if (!db) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(FONT_IDB_STORE, 'readwrite');
+      const store = tx.objectStore(FONT_IDB_STORE);
+      store.put(buffer.slice(0), fontId);
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => {
+        db.close();
+        resolve();
+      };
+    } catch {
+      db.close();
+      resolve();
+    }
+  });
+}
+
 export function applyFontAttribute(fontId: FontFamily): void {
   if (typeof document === 'undefined') return;
   document.documentElement.setAttribute('data-font', fontId);
@@ -76,16 +175,16 @@ export async function isFontCached(fontId: FontFamily): Promise<boolean> {
   if (fontId === 'default' || loadedFontFamilies.has(fontId)) {
     return true;
   }
-  if (typeof window === 'undefined' || !('caches' in window)) {
-    return false;
+  if (typeof window !== 'undefined' && 'caches' in window) {
+    try {
+      const cache = await caches.open(FONT_CACHE_NAME);
+      const match = await cache.match(getCacheKeyUrl(fontId));
+      if (match) return true;
+    } catch {
+      // Fall back to IndexedDB check
+    }
   }
-  try {
-    const cache = await caches.open(FONT_CACHE_NAME);
-    const match = await cache.match(getCacheKeyUrl(fontId));
-    return Boolean(match);
-  } catch {
-    return false;
-  }
+  return hasFontInIdb(fontId);
 }
 
 async function registerFontBuffer(familyName: string, buffer: ArrayBuffer): Promise<void> {
@@ -215,7 +314,7 @@ export async function loadAndApplyFont(
 
   const taskPromise = (async (): Promise<boolean> => {
     try {
-      // 1. Check persistent Cache Storage first
+      // 1a. Check persistent Cache Storage first (available in HTTPS / localhost)
       if (typeof window !== 'undefined' && 'caches' in window) {
         try {
           const cache = await caches.open(FONT_CACHE_NAME);
@@ -229,8 +328,18 @@ export async function loadAndApplyFont(
             return true;
           }
         } catch {
-          // Proceed to network stream if Cache Storage access fails
+          // Proceed to IndexedDB / network stream if Cache Storage access fails
         }
+      }
+
+      // 1b. Check IndexedDB fallback (works on LAN HTTP deployments where window.caches is undefined)
+      const idbBuffer = await readFontFromIdb(fontId);
+      if (idbBuffer) {
+        notifyProgress(100);
+        await registerFontBuffer(preset.cssFamilyName!, idbBuffer);
+        loadedFontFamilies.add(fontId);
+        applyFontAttribute(fontId);
+        return true;
       }
 
       // 2. Stream from CDN with real-time byte progress
@@ -240,7 +349,8 @@ export async function loadAndApplyFont(
         notifyProgress
       );
 
-      // 3. Persist binary in Cache Storage for offline/zero-latency future loads
+      // 3. Persist binary in Cache Storage or IndexedDB for offline/zero-latency future loads
+      let storedInCacheApi = false;
       if (typeof window !== 'undefined' && 'caches' in window) {
         try {
           const cache = await caches.open(FONT_CACHE_NAME);
@@ -253,9 +363,13 @@ export async function loadAndApplyFont(
               },
             })
           );
+          storedInCacheApi = true;
         } catch {
-          // Ignore quota or private-browsing cache write errors
+          // Fall back to IndexedDB
         }
+      }
+      if (!storedInCacheApi) {
+        await writeFontToIdb(fontId, buffer);
       }
 
       // 4. Register in document.fonts and activate

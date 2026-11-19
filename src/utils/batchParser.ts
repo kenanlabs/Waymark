@@ -1,9 +1,10 @@
-import type { CustomFieldKey, PanelNode, PanelVersion } from '../types/panel';
+import type { CustomFieldKey, PanelNode, PanelVersion, Workspace } from '../types/panel';
 import { generateId } from './crypto';
 import { normalizeBaseUrl, normalizeEntrance, splitFullPanelUrl } from './userscript';
 
 export interface ParsedBatchCandidate {
   lineNumber: number;
+  workspaceName?: string;
   name: string;
   baseUrl: string;
   entrance: string;
@@ -58,8 +59,14 @@ function buildCustomValues(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function looksLikeUrl(input: string): boolean {
+  const trimmed = String(input || '').trim();
+  if (!trimmed) return false;
+  return Boolean(normalizeBaseUrl(trimmed));
+}
+
 export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
-  const trimmed = raw.trim();
+  const trimmed = raw.replace(/^\uFEFF/, '').trim();
   if (!trimmed) return [];
 
   if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
@@ -75,6 +82,7 @@ export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
         const name = String(item.name || baseUrl.replace(/^https?:\/\//i, '')).trim();
         const username = String(item.username || item.user || '').trim();
         const password = String(item.password || item.pass || '');
+        const workspaceName = String(item.workspace || item.workspaceName || '').trim() || undefined;
         const rawCustom =
           item.customValues && typeof item.customValues === 'object'
             ? (item.customValues as Record<string, unknown>)
@@ -87,12 +95,13 @@ export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
         const valid = Boolean(baseUrl);
         return {
           lineNumber: idx + 1,
+          workspaceName,
           name: name || `Site-${idx + 1}`,
           baseUrl,
           entrance,
           username,
           password,
-          group: String(item.group || '默认分组').trim(),
+          group: String(item.group || '默认分组').trim() || '默认分组',
           customValues,
           version: item.version === 'v1' ? 'v1' : 'v2',
           valid,
@@ -110,6 +119,7 @@ export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
     .filter((l) => l && !l.startsWith('#') && !l.startsWith('//'));
 
   const out: ParsedBatchCandidate[] = [];
+  let isExportedWorkspaceFormat = false;
 
   lines.forEach((line, index) => {
     const delimiter = line.includes('\t')
@@ -119,23 +129,65 @@ export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
       : ',';
     const cols = splitCsvLine(line, delimiter);
 
-    if (
-      index === 0 &&
-      /^(workspace|name|节点|站点|名称)/i.test(cols[0] || '') &&
-      /(name|url|地址|ip)/i.test(cols[1] || '')
-    ) {
-      return;
+    if (index === 0) {
+      const c0 = (cols[0] || '').toLowerCase();
+      const c1 = (cols[1] || '').toLowerCase();
+      const c2 = (cols[2] || '').toLowerCase();
+      if (
+        (c0 === 'workspace' || c0 === '工作空间') &&
+        (c1 === 'name' || c1 === '名称' || c1 === '站点') &&
+        (c2 === 'baseurl' || c2 === 'url' || c2 === '地址')
+      ) {
+        isExportedWorkspaceFormat = true;
+        return;
+      }
+      if (
+        /^(workspace|name|节点|站点|名称)$/i.test(c0) &&
+        /^(name|url|baseurl|地址|ip)$/i.test(c1)
+      ) {
+        return;
+      }
     }
 
-    const nameRaw = cols[0] || '';
-    const urlRaw = cols[1] || '';
-    const username = (cols[2] || '').trim();
-    const password = cols[3] || '';
-    const explicitEntrance = normalizeEntrance(cols[4] || '');
-    const group = (cols[5] || '默认分组').trim();
-    const customValues = buildCustomValues(cols[6], cols[7], cols[8]);
-    const version: PanelVersion = 'v2';
+    let workspaceName: string | undefined;
+    let nameRaw = '';
+    let urlRaw = '';
+    let username = '';
+    let password = '';
+    let explicitEntrance = '';
+    let group = '默认分组';
+    let customValues: Partial<Record<CustomFieldKey, string>> | undefined;
 
+    // Detect single-column URL list: e.g. "https://panel.example.com:8080/entry"
+    if (cols.length === 1 && looksLikeUrl(cols[0])) {
+      urlRaw = cols[0];
+    } else if (
+      isExportedWorkspaceFormat ||
+      (cols.length >= 3 && !looksLikeUrl(cols[1]) && looksLikeUrl(cols[2]))
+    ) {
+      // Exported 10-column CSV format:
+      // workspace, name, baseUrl, entrance, username, password, group, field1, field2, field3
+      workspaceName = (cols[0] || '').trim() || undefined;
+      nameRaw = cols[1] || '';
+      urlRaw = cols[2] || '';
+      explicitEntrance = normalizeEntrance(cols[3] || '');
+      username = (cols[4] || '').trim();
+      password = cols[5] || '';
+      group = (cols[6] || '默认分组').trim() || '默认分组';
+      customValues = buildCustomValues(cols[7], cols[8], cols[9]);
+    } else {
+      // Standard 9-column format:
+      // name, url, username, password, entrance, group, field1, field2, field3
+      nameRaw = cols[0] || '';
+      urlRaw = cols[1] || '';
+      username = (cols[2] || '').trim();
+      password = cols[3] || '';
+      explicitEntrance = normalizeEntrance(cols[4] || '');
+      group = (cols[5] || '默认分组').trim() || '默认分组';
+      customValues = buildCustomValues(cols[6], cols[7], cols[8]);
+    }
+
+    const version: PanelVersion = 'v2';
     const split = splitFullPanelUrl(urlRaw);
     const baseUrl = normalizeBaseUrl(split.baseUrl || urlRaw);
     const entrance = explicitEntrance || split.entrance;
@@ -143,10 +195,11 @@ export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
 
     let error: string | undefined;
     if (!urlRaw) error = '缺少访问地址';
-    else if (!/^https?:\/\/.+/.test(baseUrl)) error = '地址格式无效';
+    else if (!baseUrl || !/^https?:\/\/.+/.test(baseUrl)) error = '地址格式无效';
 
     out.push({
       lineNumber: index + 1,
+      workspaceName,
       name,
       baseUrl,
       entrance,
@@ -165,24 +218,38 @@ export function parseBatchInput(raw: string): ParsedBatchCandidate[] {
 
 export function candidatesToPanelNodes(
   candidates: ParsedBatchCandidate[],
-  workspaceId?: string
+  activeWorkspaceId?: string,
+  workspaces?: Workspace[]
 ): PanelNode[] {
   const now = new Date().toISOString();
+  const wsByName = new Map<string, string>();
+  if (workspaces) {
+    for (const ws of workspaces) {
+      wsByName.set(ws.name.trim().toLowerCase(), ws.id);
+    }
+  }
+
   return candidates
     .filter((c) => c.valid)
-    .map((c) => ({
-      id: generateId(),
-      workspaceId,
-      name: c.name,
-      baseUrl: c.baseUrl,
-      entrance: c.entrance,
-      username: c.username,
-      password: c.password,
-      group: c.group || '默认分组',
-      customValues: c.customValues,
-      version: c.version,
-      autoSubmit: Boolean(c.username || c.password),
-      createdAt: now,
-      updatedAt: now,
-    }));
+    .map((c) => {
+      const matchedWsId =
+        c.workspaceName && wsByName.has(c.workspaceName.toLowerCase())
+          ? wsByName.get(c.workspaceName.toLowerCase())
+          : activeWorkspaceId;
+      return {
+        id: generateId(),
+        workspaceId: matchedWsId,
+        name: c.name,
+        baseUrl: c.baseUrl,
+        entrance: c.entrance,
+        username: c.username,
+        password: c.password,
+        group: c.group || '默认分组',
+        customValues: c.customValues,
+        version: c.version,
+        autoSubmit: Boolean(c.username || c.password),
+        createdAt: now,
+        updatedAt: now,
+      };
+    });
 }

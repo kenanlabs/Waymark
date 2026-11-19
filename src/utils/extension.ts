@@ -1,4 +1,3 @@
-import zlib from 'node:zlib';
 import {
   EXTENSION_LAUNCH_PAYLOAD,
   EXTENSION_PROBE_REQUEST,
@@ -10,7 +9,44 @@ import { buildAutoFillCoreSource } from './userscript.ts';
 
 export interface ExtensionArchiveEntry {
   name: string;
-  data: Buffer;
+  data: Uint8Array;
+}
+
+const textEncoder = new TextEncoder();
+
+function encodeUtf8(str: string): Uint8Array {
+  return textEncoder.encode(str);
+}
+
+function concatBytes(arrays: Uint8Array[]): Uint8Array {
+  let totalLength = 0;
+  for (const arr of arrays) totalLength += arr.length;
+  const out = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const arr of arrays) {
+    out.set(arr, offset);
+    offset += arr.length;
+  }
+  return out;
+}
+
+function writeUInt16LE(buf: Uint8Array, value: number, offset: number): void {
+  buf[offset] = value & 0xff;
+  buf[offset + 1] = (value >>> 8) & 0xff;
+}
+
+function writeUInt32LE(buf: Uint8Array, value: number, offset: number): void {
+  buf[offset] = value & 0xff;
+  buf[offset + 1] = (value >>> 8) & 0xff;
+  buf[offset + 2] = (value >>> 16) & 0xff;
+  buf[offset + 3] = (value >>> 24) & 0xff;
+}
+
+function writeUInt32BE(buf: Uint8Array, value: number, offset: number): void {
+  buf[offset] = (value >>> 24) & 0xff;
+  buf[offset + 1] = (value >>> 16) & 0xff;
+  buf[offset + 2] = (value >>> 8) & 0xff;
+  buf[offset + 3] = value & 0xff;
 }
 
 const CRC_TABLE = (() => {
@@ -25,7 +61,7 @@ const CRC_TABLE = (() => {
   return table;
 })();
 
-function crc32(buf: Buffer): number {
+function crc32(buf: Uint8Array): number {
   let c = 0xffffffff;
   for (let i = 0; i < buf.length; i++) {
     c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
@@ -33,18 +69,52 @@ function crc32(buf: Buffer): number {
   return (c ^ 0xffffffff) >>> 0;
 }
 
-function pngChunk(type: string, data: Buffer): Buffer {
-  const typeBuf = Buffer.from(type, 'ascii');
-  const lenBuf = Buffer.alloc(4);
-  lenBuf.writeUInt32BE(data.length, 0);
-  const crcInput = Buffer.concat([typeBuf, data]);
-  const crcBuf = Buffer.alloc(4);
-  crcBuf.writeUInt32BE(crc32(crcInput), 0);
-  return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
+function adler32(buf: Uint8Array): number {
+  let a = 1;
+  let b = 0;
+  for (let i = 0; i < buf.length; i++) {
+    a = (a + buf[i]) % 65521;
+    b = (b + a) % 65521;
+  }
+  return ((b << 16) | a) >>> 0;
 }
 
-function generateExtensionIconPng(size: number): Buffer {
-  const raw = Buffer.alloc(size * (1 + size * 4));
+function zlibStoreUncompressed(raw: Uint8Array): Uint8Array {
+  const maxBlock = 65535;
+  const numBlocks = Math.max(1, Math.ceil(raw.length / maxBlock));
+  const out = new Uint8Array(2 + numBlocks * 5 + raw.length + 4);
+  out[0] = 0x78;
+  out[1] = 0x01;
+  let inOffset = 0;
+  let outOffset = 2;
+  for (let b = 0; b < numBlocks; b++) {
+    const isFinal = b === numBlocks - 1;
+    const len = Math.min(maxBlock, raw.length - inOffset);
+    const nlen = ~len & 0xffff;
+    out[outOffset] = isFinal ? 0x01 : 0x00;
+    writeUInt16LE(out, len, outOffset + 1);
+    writeUInt16LE(out, nlen, outOffset + 3);
+    outOffset += 5;
+    out.set(raw.subarray(inOffset, inOffset + len), outOffset);
+    outOffset += len;
+    inOffset += len;
+  }
+  writeUInt32BE(out, adler32(raw), outOffset);
+  return out;
+}
+
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const typeBuf = encodeUtf8(type);
+  const lenBuf = new Uint8Array(4);
+  writeUInt32BE(lenBuf, data.length, 0);
+  const crcInput = concatBytes([typeBuf, data]);
+  const crcBuf = new Uint8Array(4);
+  writeUInt32BE(crcBuf, crc32(crcInput), 0);
+  return concatBytes([lenBuf, typeBuf, data, crcBuf]);
+}
+
+function generateExtensionIconPng(size: number): Uint8Array {
+  const raw = new Uint8Array(size * (1 + size * 4));
   const radius = size * 0.22;
   const center = (size - 1) / 2;
 
@@ -100,23 +170,23 @@ function generateExtensionIconPng(size: number): Buffer {
     }
   }
 
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
+  const ihdr = new Uint8Array(13);
+  writeUInt32BE(ihdr, size, 0);
+  writeUInt32BE(ihdr, size, 4);
   ihdr[8] = 8; // bit depth
   ihdr[9] = 6; // RGBA
   ihdr[10] = 0;
   ihdr[11] = 0;
   ihdr[12] = 0;
 
-  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-  const idat = zlib.deflateSync(raw);
+  const signature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const idat = zlibStoreUncompressed(raw);
 
-  return Buffer.concat([
+  return concatBytes([
     signature,
     pngChunk('IHDR', ihdr),
     pngChunk('IDAT', idat),
-    pngChunk('IEND', Buffer.alloc(0)),
+    pngChunk('IEND', new Uint8Array(0)),
   ]);
 }
 
@@ -633,12 +703,8 @@ function buildHubBridgeJs(): string {
   function markHubReady() {
     if (!isHubDocument() || !isExtensionContextValid()) return false;
     document.documentElement.setAttribute('data-waymark-extension', EXT_VERSION);
-    if (!document.documentElement.getAttribute('data-paneldeck-bridge')) {
-      document.documentElement.setAttribute('data-paneldeck-bridge', EXT_VERSION);
-    }
     try {
       window.dispatchEvent(new CustomEvent('${EXTENSION_READY_EVENT}', { detail: EXT_VERSION }));
-      window.dispatchEvent(new CustomEvent('paneldeck-bridge-ready'));
     } catch (_) {}
     try {
       window.postMessage(
@@ -845,19 +911,19 @@ function buildPopupJs(): string {
 
 export function buildExtensionEntries(): ExtensionArchiveEntry[] {
   return [
-    { name: 'manifest.json', data: Buffer.from(buildManifestJson(), 'utf8') },
-    { name: 'background.js', data: Buffer.from(buildBackgroundJs(), 'utf8') },
-    { name: 'hub-bridge.js', data: Buffer.from(buildHubBridgeJs(), 'utf8') },
-    { name: 'autofill-core.js', data: Buffer.from(buildAutofillCoreFileJs(), 'utf8') },
-    { name: 'popup.html', data: Buffer.from(buildPopupHtml(), 'utf8') },
-    { name: 'popup.js', data: Buffer.from(buildPopupJs(), 'utf8') },
+    { name: 'manifest.json', data: encodeUtf8(buildManifestJson()) },
+    { name: 'background.js', data: encodeUtf8(buildBackgroundJs()) },
+    { name: 'hub-bridge.js', data: encodeUtf8(buildHubBridgeJs()) },
+    { name: 'autofill-core.js', data: encodeUtf8(buildAutofillCoreFileJs()) },
+    { name: 'popup.html', data: encodeUtf8(buildPopupHtml()) },
+    { name: 'popup.js', data: encodeUtf8(buildPopupJs()) },
     { name: 'icons/icon16.png', data: generateExtensionIconPng(16) },
     { name: 'icons/icon48.png', data: generateExtensionIconPng(48) },
     { name: 'icons/icon128.png', data: generateExtensionIconPng(128) },
   ];
 }
 
-function buildZipFromEntries(entries: ExtensionArchiveEntry[]): Buffer {
+function buildZipFromEntries(entries: ExtensionArchiveEntry[]): Uint8Array {
   const now = new Date();
   const dosTime =
     ((now.getHours() & 0x1f) << 11) |
@@ -868,73 +934,72 @@ function buildZipFromEntries(entries: ExtensionArchiveEntry[]): Buffer {
     (((now.getMonth() + 1) & 0x0f) << 5) |
     (now.getDate() & 0x1f);
 
-  const localParts: Buffer[] = [];
-  const centralParts: Buffer[] = [];
+  const localParts: Uint8Array[] = [];
+  const centralParts: Uint8Array[] = [];
   let offset = 0;
 
   for (const entry of entries) {
-    const nameBuf = Buffer.from(entry.name, 'utf8');
-    const uncompressed = entry.data;
-    const compressed = zlib.deflateRawSync(uncompressed);
-    const crc = crc32(uncompressed);
+    const nameBuf = encodeUtf8(entry.name);
+    const data = entry.data;
+    const crc = crc32(data);
 
-    const localHeader = Buffer.alloc(30);
-    localHeader.writeUInt32LE(0x04034b50, 0);
-    localHeader.writeUInt16LE(20, 4);
-    localHeader.writeUInt16LE(0x0800, 6);
-    localHeader.writeUInt16LE(8, 8);
-    localHeader.writeUInt16LE(dosTime, 10);
-    localHeader.writeUInt16LE(dosDate, 12);
-    localHeader.writeUInt32LE(crc, 14);
-    localHeader.writeUInt32LE(compressed.length, 18);
-    localHeader.writeUInt32LE(uncompressed.length, 22);
-    localHeader.writeUInt16LE(nameBuf.length, 26);
-    localHeader.writeUInt16LE(0, 28);
+    const localHeader = new Uint8Array(30);
+    writeUInt32LE(localHeader, 0x04034b50, 0);
+    writeUInt16LE(localHeader, 20, 4);
+    writeUInt16LE(localHeader, 0x0800, 6);
+    writeUInt16LE(localHeader, 0, 8); // STORE (uncompressed) for universal isomorphic compatibility
+    writeUInt16LE(localHeader, dosTime, 10);
+    writeUInt16LE(localHeader, dosDate, 12);
+    writeUInt32LE(localHeader, crc, 14);
+    writeUInt32LE(localHeader, data.length, 18);
+    writeUInt32LE(localHeader, data.length, 22);
+    writeUInt16LE(localHeader, nameBuf.length, 26);
+    writeUInt16LE(localHeader, 0, 28);
 
-    localParts.push(localHeader, nameBuf, compressed);
+    localParts.push(localHeader, nameBuf, data);
 
-    const centralHeader = Buffer.alloc(46);
-    centralHeader.writeUInt32LE(0x02014b50, 0);
-    centralHeader.writeUInt16LE(20, 4);
-    centralHeader.writeUInt16LE(20, 6);
-    centralHeader.writeUInt16LE(0x0800, 8);
-    centralHeader.writeUInt16LE(8, 10);
-    centralHeader.writeUInt16LE(dosTime, 12);
-    centralHeader.writeUInt16LE(dosDate, 14);
-    centralHeader.writeUInt32LE(crc, 16);
-    centralHeader.writeUInt32LE(compressed.length, 20);
-    centralHeader.writeUInt32LE(uncompressed.length, 24);
-    centralHeader.writeUInt16LE(nameBuf.length, 28);
-    centralHeader.writeUInt16LE(0, 30);
-    centralHeader.writeUInt16LE(0, 32);
-    centralHeader.writeUInt16LE(0, 34);
-    centralHeader.writeUInt16LE(0, 36);
-    centralHeader.writeUInt32LE(0, 38);
-    centralHeader.writeUInt32LE(offset, 42);
+    const centralHeader = new Uint8Array(46);
+    writeUInt32LE(centralHeader, 0x02014b50, 0);
+    writeUInt16LE(centralHeader, 20, 4);
+    writeUInt16LE(centralHeader, 20, 6);
+    writeUInt16LE(centralHeader, 0x0800, 8);
+    writeUInt16LE(centralHeader, 0, 10); // STORE
+    writeUInt16LE(centralHeader, dosTime, 12);
+    writeUInt16LE(centralHeader, dosDate, 14);
+    writeUInt32LE(centralHeader, crc, 16);
+    writeUInt32LE(centralHeader, data.length, 20);
+    writeUInt32LE(centralHeader, data.length, 24);
+    writeUInt16LE(centralHeader, nameBuf.length, 28);
+    writeUInt16LE(centralHeader, 0, 30);
+    writeUInt16LE(centralHeader, 0, 32);
+    writeUInt16LE(centralHeader, 0, 34);
+    writeUInt16LE(centralHeader, 0, 36);
+    writeUInt32LE(centralHeader, 0, 38);
+    writeUInt32LE(centralHeader, offset, 42);
 
     centralParts.push(centralHeader, nameBuf);
-    offset += localHeader.length + nameBuf.length + compressed.length;
+    offset += localHeader.length + nameBuf.length + data.length;
   }
 
-  const centralDir = Buffer.concat(centralParts);
-  const eocd = Buffer.alloc(22);
-  eocd.writeUInt32LE(0x06054b50, 0);
-  eocd.writeUInt16LE(0, 4);
-  eocd.writeUInt16LE(0, 6);
-  eocd.writeUInt16LE(entries.length, 8);
-  eocd.writeUInt16LE(entries.length, 10);
-  eocd.writeUInt32LE(centralDir.length, 12);
-  eocd.writeUInt32LE(offset, 16);
-  eocd.writeUInt16LE(0, 20);
+  const centralDir = concatBytes(centralParts);
+  const eocd = new Uint8Array(22);
+  writeUInt32LE(eocd, 0x06054b50, 0);
+  writeUInt16LE(eocd, 0, 4);
+  writeUInt16LE(eocd, 0, 6);
+  writeUInt16LE(eocd, entries.length, 8);
+  writeUInt16LE(eocd, entries.length, 10);
+  writeUInt32LE(eocd, centralDir.length, 12);
+  writeUInt32LE(eocd, offset, 16);
+  writeUInt16LE(eocd, 0, 20);
 
-  return Buffer.concat([...localParts, centralDir, eocd]);
+  return concatBytes([...localParts, centralDir, eocd]);
 }
 
-let cachedZipBuffer: Buffer | null = null;
+let cachedZipBytes: Uint8Array | null = null;
 
-export function getExtensionZipBuffer(): Buffer {
-  if (!cachedZipBuffer) {
-    cachedZipBuffer = buildZipFromEntries(buildExtensionEntries());
+export function getExtensionZipBuffer(): Uint8Array {
+  if (!cachedZipBytes) {
+    cachedZipBytes = buildZipFromEntries(buildExtensionEntries());
   }
-  return cachedZipBuffer;
+  return cachedZipBytes;
 }

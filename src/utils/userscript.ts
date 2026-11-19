@@ -4,6 +4,18 @@ export const BRIDGE_VERSION = '1.6.0';
 export const BRIDGE_PROBE_REQUEST_EVENT = 'waymark-probe-request';
 export const BRIDGE_PROBE_RESULT_EVENT = 'waymark-probe-result';
 
+export function isValidHttpHostname(hostname: string): boolean {
+  const clean = hostname.trim().toLowerCase();
+  if (!clean || /\s/.test(clean)) return false;
+  if (clean === 'localhost' || (clean.startsWith('[') && clean.endsWith(']'))) return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(clean)) {
+    return clean.split('.').every((octet) => Number(octet) >= 0 && Number(octet) <= 255);
+  }
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(
+    clean
+  );
+}
+
 export function normalizeBaseUrl(rawUrl: string): string {
   let trimmed = rawUrl.trim();
   if (!trimmed) return '';
@@ -12,28 +24,43 @@ export function normalizeBaseUrl(rawUrl: string): string {
   }
   try {
     const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+    if (!isValidHttpHostname(parsed.hostname)) return '';
     return parsed.origin;
   } catch {
-    return trimmed.replace(/\/+$/, '');
+    return '';
   }
 }
 
 export function normalizeEntrance(rawEntrance: string): string {
-  const cleaned = rawEntrance.trim().replace(/^\/+|\/+$/g, '');
-  return cleaned ? `/${cleaned}` : '';
+  const trimmed = rawEntrance.trim();
+  if (!trimmed) return '';
+  const qIndex = trimmed.search(/[?#]/);
+  const pathPart = (qIndex >= 0 ? trimmed.slice(0, qIndex) : trimmed).replace(/^\/+|\/+$/g, '');
+  const suffix = qIndex >= 0 ? trimmed.slice(qIndex) : '';
+  if (!pathPart && !suffix) return '';
+  if (!pathPart && suffix) return `/${suffix}`;
+  return `/${pathPart}${suffix}`;
 }
 
 export function splitFullPanelUrl(
   rawInput: string,
-  panelType: PanelType = '1panel'
+  panelType: PanelType = 'custom'
 ): { baseUrl: string; entrance: string } {
   const trimmed = rawInput.trim();
   if (!trimmed) return { baseUrl: '', entrance: '' };
   const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
   try {
     const parsed = new URL(withScheme);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { baseUrl: '', entrance: '' };
+    }
+    if (!isValidHttpHostname(parsed.hostname)) {
+      return { baseUrl: '', entrance: '' };
+    }
     const pathname = parsed.pathname.replace(/^\/+|\/+$/g, '');
-    if (!pathname) {
+    const suffix = `${parsed.search || ''}${parsed.hash || ''}`;
+    if (!pathname && !suffix) {
       return { baseUrl: parsed.origin, entrance: '' };
     }
 
@@ -49,10 +76,10 @@ export function splitFullPanelUrl(
 
     return {
       baseUrl: parsed.origin,
-      entrance: `/${pathname}`,
+      entrance: normalizeEntrance(`${pathname}${suffix}`),
     };
   } catch {
-    return { baseUrl: normalizeBaseUrl(trimmed), entrance: '' };
+    return { baseUrl: '', entrance: '' };
   }
 }
 
@@ -595,6 +622,10 @@ ${core}
 
   function storePendingPayload(rawObj) {
     if (!rawObj || !rawObj.origin) return;
+    // Yield to the dedicated Waymark browser extension if it is active on the page
+    if (document.documentElement && document.documentElement.hasAttribute('data-waymark-extension')) {
+      return;
+    }
     try {
       GM_setValue(STORAGE_KEY, JSON.stringify({ ...rawObj, ts: Date.now() }));
     } catch (_) {}

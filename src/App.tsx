@@ -33,6 +33,7 @@ import {
   fetchAdminState,
   fetchAuthStatus,
   fetchPublicWorkspaceByRoute,
+  isVersionAtLeast,
   logoutAdminAccount,
   probePanelNode,
   removePublicWorkspace,
@@ -341,7 +342,9 @@ export default function App() {
     if (publicMode !== 'admin') return;
     const checkBridge = () => {
       const extVer = document.documentElement.getAttribute('data-waymark-extension');
-      const userVer = document.documentElement.getAttribute('data-paneldeck-bridge');
+      const rawUserVer = document.documentElement.getAttribute('data-paneldeck-bridge');
+      // Guard against older extension versions that wrote their version into data-paneldeck-bridge
+      const userVer = rawUserVer && rawUserVer !== extVer ? rawUserVer : null;
       setExtensionVersion(extVer);
       setExtensionActive(Boolean(extVer));
       setBridgeVersion(userVer);
@@ -435,6 +438,7 @@ export default function App() {
   // Load authoritative workspace & node state from server after admin authentication
   useEffect(() => {
     if (publicMode !== 'admin' || !hydrated || !authChecked || !authStatus.authenticated) return;
+    if (lockedEnvelope) return;
     if (serverStateLoaded) return;
 
     let cancelled = false;
@@ -463,6 +467,10 @@ export default function App() {
             res.state.viewMode === 'table' || res.state.viewMode === 'grid'
               ? res.state.viewMode
               : viewMode;
+          const srvTheme: 'light' | 'dark' =
+            res.state.theme === 'dark' || res.state.theme === 'light'
+              ? res.state.theme
+              : theme;
           const srvBgTone: BgTone = res.state.bgTone
             ? normalizeBgTone(res.state.bgTone)
             : bgTone;
@@ -476,6 +484,7 @@ export default function App() {
           lastSavedServerSigRef.current = JSON.stringify({
             activeWorkspaceId: srvActiveId,
             viewMode: srvViewMode,
+            theme: srvTheme,
             bgTone: srvBgTone,
             bgPattern: srvBgPattern,
             fontFamily: srvFontFamily,
@@ -485,16 +494,20 @@ export default function App() {
           setWorkspaces(srvWorkspaces);
           setActiveWorkspaceId(srvActiveId);
           setViewMode(srvViewMode);
+          setTheme(srvTheme);
           setBgTone(srvBgTone);
           setBgPattern(srvBgPattern);
           setFontFamily(srvFontFamily);
           setNodes(srvNodes);
-          setLockedEnvelope(null);
           localStorage.setItem(
             WORKSPACES_STORAGE_KEY,
             JSON.stringify({ activeWorkspaceId: srvActiveId, workspaces: srvWorkspaces })
           );
-          if (!masterPassphrase) {
+          if (masterPassphrase) {
+            void encryptVaultNodes(srvNodes, masterPassphrase, srvWorkspaces).then((envelope) => {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
+            });
+          } else {
             localStorage.setItem(
               STORAGE_KEY,
               JSON.stringify({
@@ -518,10 +531,7 @@ export default function App() {
             Boolean(workspaces[0]?.isPublic) ||
             Boolean(workspaces[0]?.description);
 
-          if (lockedEnvelope) {
-            lastSavedServerSigRef.current = '';
-            pendingMigrationToastRef.current = true;
-          } else if (hasCustomLocalData) {
+          if (hasCustomLocalData) {
             // Trigger immediate automatic migration of existing localStorage data to server
             lastSavedServerSigRef.current = '';
             pendingMigrationToastRef.current = true;
@@ -529,6 +539,7 @@ export default function App() {
             lastSavedServerSigRef.current = JSON.stringify({
               activeWorkspaceId,
               viewMode,
+              theme,
               bgTone,
               bgPattern,
               fontFamily,
@@ -544,6 +555,7 @@ export default function App() {
         lastSavedServerSigRef.current = JSON.stringify({
           activeWorkspaceId,
           viewMode,
+          theme,
           bgTone,
           bgPattern,
           fontFamily,
@@ -558,6 +570,7 @@ export default function App() {
         lastSavedServerSigRef.current = JSON.stringify({
           activeWorkspaceId,
           viewMode,
+          theme,
           bgTone,
           bgPattern,
           fontFamily,
@@ -581,6 +594,7 @@ export default function App() {
     lockedEnvelope,
     activeWorkspaceId,
     viewMode,
+    theme,
     bgTone,
     bgPattern,
     fontFamily,
@@ -602,6 +616,7 @@ export default function App() {
     const payload = {
       activeWorkspaceId,
       viewMode,
+      theme,
       bgTone,
       bgPattern,
       fontFamily,
@@ -636,6 +651,7 @@ export default function App() {
     lockedEnvelope,
     activeWorkspaceId,
     viewMode,
+    theme,
     bgTone,
     bgPattern,
     fontFamily,
@@ -1347,41 +1363,132 @@ export default function App() {
     replaceAll = false,
     importedWorkspaces?: Workspace[]
   ) => {
-    let nextWorkspaces = workspaces;
+    const now = new Date().toISOString();
+    let nextWorkspaces = [...workspaces];
+
     if (importedWorkspaces && importedWorkspaces.length > 0) {
-      const existingIds = new Set(workspaces.map((w) => w.id));
-      const additions = importedWorkspaces.filter((w) => !existingIds.has(w.id));
-      if (additions.length > 0) {
-        nextWorkspaces = [...workspaces, ...additions];
-        setWorkspaces(nextWorkspaces);
+      const existingMap = new Map(nextWorkspaces.map((w) => [w.id, w]));
+      for (const impWs of importedWorkspaces) {
+        const existing = existingMap.get(impWs.id);
+        if (existing) {
+          const mergedGroups = Array.from(
+            new Set([...(existing.groups || []), ...(impWs.groups || [])])
+          );
+          existingMap.set(impWs.id, {
+            ...existing,
+            groups: mergedGroups,
+            customFields: impWs.customFields?.length
+              ? normalizeWorkspaceCustomFields(impWs.customFields)
+              : existing.customFields,
+            updatedAt: now,
+          });
+        } else {
+          existingMap.set(impWs.id, {
+            ...impWs,
+            groups:
+              Array.isArray(impWs.groups) && impWs.groups.length > 0
+                ? impWs.groups
+                : [...DEFAULT_WORKSPACE_GROUPS],
+            customFields: normalizeWorkspaceCustomFields(impWs.customFields),
+          });
+        }
       }
+      nextWorkspaces = Array.from(existingMap.values());
     }
 
     const validWsIds = new Set(nextWorkspaces.map((w) => w.id));
-    const normalizedImported = imported.map((item) => ({
-      ...item,
-      workspaceId:
+    const normalizedImported = imported.map((item) => {
+      const wsId =
         item.workspaceId && validWsIds.has(item.workspaceId)
           ? item.workspaceId
-          : activeWorkspace.id,
-    }));
+          : activeWorkspace.id;
+      const baseUrl = normalizeBaseUrl(item.baseUrl);
+      const entrance = normalizeEntrance(item.entrance);
+      return {
+        ...item,
+        id: item.id || generateId(),
+        workspaceId: wsId,
+        baseUrl: baseUrl || item.baseUrl,
+        entrance,
+        group: (item.group || '默认分组').trim() || '默认分组',
+        createdAt: item.createdAt || now,
+        updatedAt: now,
+      };
+    });
+
+    // Register any new groups from imported nodes into their target workspaces
+    const groupsByWs = new Map<string, Set<string>>();
+    for (const node of normalizedImported) {
+      const wsId = node.workspaceId || activeWorkspace.id;
+      if (!groupsByWs.has(wsId)) {
+        groupsByWs.set(wsId, new Set());
+      }
+      if (node.group) {
+        groupsByWs.get(wsId)!.add(node.group);
+      }
+    }
+
+    nextWorkspaces = nextWorkspaces.map((ws) => {
+      const addedGroups = groupsByWs.get(ws.id);
+      if (!addedGroups || addedGroups.size === 0) return ws;
+      const mergedGroups = Array.from(new Set([...(ws.groups || []), ...addedGroups]));
+      if (mergedGroups.length === (ws.groups || []).length) return ws;
+      return { ...ws, groups: mergedGroups, updatedAt: now };
+    });
+    setWorkspaces(nextWorkspaces);
+
+    let addedCount = 0;
+    let updatedCount = 0;
 
     updateNodes((prev) => {
-      if (replaceAll) return normalizedImported;
-      const existingKeys = new Set(
-        prev.map((p) => `${resolveNodeWorkspaceId(p)}|${p.baseUrl}${p.entrance}`)
-      );
+      if (replaceAll) {
+        addedCount = normalizedImported.length;
+        return normalizedImported;
+      }
+      const existingIndexByKey = new Map<string, number>();
       const merged = [...prev];
+      merged.forEach((p, idx) => {
+        const wsId =
+          p.workspaceId && validWsIds.has(p.workspaceId) ? p.workspaceId : defaultWorkspaceId;
+        existingIndexByKey.set(`${wsId}|${p.baseUrl}${p.entrance}`, idx);
+      });
+
       for (const item of normalizedImported) {
         const key = `${item.workspaceId}|${item.baseUrl}${item.entrance}`;
-        if (!existingKeys.has(key)) {
+        const existingIdx = existingIndexByKey.get(key);
+        if (existingIdx === undefined) {
+          existingIndexByKey.set(key, merged.length);
           merged.push(item);
-          existingKeys.add(key);
+          addedCount++;
+        } else {
+          // Update credentials / group / customValues if re-importing an existing site
+          const existing = merged[existingIdx];
+          merged[existingIdx] = {
+            ...existing,
+            name: item.name || existing.name,
+            username: item.username || existing.username,
+            password: item.password || existing.password,
+            group: item.group || existing.group,
+            customValues: item.customValues
+              ? { ...existing.customValues, ...item.customValues }
+              : existing.customValues,
+            updatedAt: now,
+          };
+          updatedCount++;
         }
       }
       return merged;
     }, nextWorkspaces);
-    notify(`已导入 ${imported.length} 个站点`);
+
+    if (addedCount > 0 && updatedCount > 0) {
+      notify(`已新增 ${addedCount} 个站点，更新 ${updatedCount} 个已有站点`);
+    } else if (addedCount > 0) {
+      notify(`已导入 ${addedCount} 个站点`);
+    } else if (updatedCount > 0) {
+      notify(`已更新 ${updatedCount} 个已有站点`);
+    } else {
+      notify('未发现可导入的站点');
+    }
   };
 
   if (publicMode === 'checking') {
@@ -1422,12 +1529,12 @@ export default function App() {
     );
   }
 
-  if (!serverStateLoaded) {
-    return <div className="min-h-screen bg-[#FAFAFA] dark:bg-[#09090B]" />;
-  }
-
   if (lockedEnvelope) {
     return <VaultLockScreen onUnlock={handleUnlockVault} />;
+  }
+
+  if (!serverStateLoaded) {
+    return <div className="min-h-screen bg-[#FAFAFA] dark:bg-[#09090B]" />;
   }
 
   return (
@@ -1442,10 +1549,10 @@ export default function App() {
         onOpenBridge={() => openSettings('bridge')}
         bridgeStatus={
           extensionActive
-            ? extensionVersion !== EXTENSION_VERSION
+            ? !isVersionAtLeast(extensionVersion, EXTENSION_VERSION)
               ? 'stale'
               : undefined
-            : bridgeActive && bridgeVersion !== BRIDGE_VERSION
+            : bridgeActive && !isVersionAtLeast(bridgeVersion, BRIDGE_VERSION)
               ? 'stale'
               : undefined
         }

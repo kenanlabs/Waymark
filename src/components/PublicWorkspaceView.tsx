@@ -137,7 +137,7 @@ export function PublicWorkspaceView({
           </p>
           <a
             href="/"
-            className="mt-5 inline-flex items-center gap-1.5 h-8 px-3.5 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-lg transition-colors"
+            className="wm-btn-primary mt-5 inline-flex items-center gap-1.5 h-8 px-3.5 text-xs font-medium rounded-lg transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
             <span>返回首页</span>
@@ -228,7 +228,7 @@ export function PublicWorkspaceView({
                     <motion.span
                       layoutId="public-group-underline"
                       transition={{ type: 'spring', stiffness: 480, damping: 36 }}
-                      className="absolute inset-x-0 bottom-0 h-[2px] bg-[#09090B] dark:bg-[#FAFAFA]"
+                      className="absolute inset-x-0 bottom-0 h-[2px] bg-[var(--wm-switch-on)]"
                     />
                   )}
                 </button>
@@ -256,7 +256,7 @@ export function PublicWorkspaceView({
                         <motion.span
                           layoutId="public-group-underline"
                           transition={{ type: 'spring', stiffness: 480, damping: 36 }}
-                          className="absolute inset-x-0 bottom-0 h-[2px] bg-[#09090B] dark:bg-[#FAFAFA]"
+                          className="absolute inset-x-0 bottom-0 h-[2px] bg-[var(--wm-switch-on)]"
                         />
                       )}
                     </button>
@@ -462,7 +462,7 @@ export function PublicWorkspaceView({
                                 href={node.targetUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-[#09090B] hover:bg-[#27272A] dark:bg-[#FAFAFA] dark:text-[#09090B] rounded-md transition-colors whitespace-nowrap"
+                                className="wm-btn-primary inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap"
                               >
                                 <span>打开</span>
                                 <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />

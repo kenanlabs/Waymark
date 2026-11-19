@@ -52,6 +52,7 @@ interface ServerWorkspaceState {
   version: 1;
   activeWorkspaceId?: string;
   viewMode?: 'grid' | 'table';
+  theme?: 'light' | 'dark';
   bgTone?: string;
   bgPattern?: string;
   fontFamily?: string;
@@ -518,6 +519,7 @@ export async function onRequest(context: PagesContext): Promise<Response> {
         activeWorkspaceId:
           typeof body.activeWorkspaceId === 'string' ? body.activeWorkspaceId : undefined,
         viewMode: body.viewMode === 'table' ? 'table' : 'grid',
+        theme: body.theme === 'dark' || body.theme === 'light' ? body.theme : undefined,
         bgTone: typeof body.bgTone === 'string' ? body.bgTone : undefined,
         bgPattern: typeof body.bgPattern === 'string' ? body.bgPattern : undefined,
         fontFamily: typeof body.fontFamily === 'string' ? body.fontFamily : undefined,

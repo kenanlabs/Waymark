@@ -128,7 +128,7 @@ export function VaultLockScreen({ onUnlock }: VaultLockScreenProps) {
 
         <div className="px-3.5 pt-2.5 pb-1 flex items-center justify-between text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
           <span>AES-256-GCM 本地保险库保护</span>
-          <span className="font-mono text-[10px] opacity-80">Waymark Hub</span>
+          <span className="font-mono text-[10px] opacity-80">Waymark</span>
         </div>
       </motion.div>
     </div>

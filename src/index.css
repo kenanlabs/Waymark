@@ -388,8 +388,18 @@ html.dark[data-bg-tone]:not([data-bg-tone="pure"]) .dark\:bg-\[\#18181B\] {
   background-color: var(--wm-muted);
 }
 
+html.dark[data-bg-tone]:not([data-bg-tone="pure"]) .dark\:hover\:bg-\[\#18181B\]:hover,
+html.dark[data-bg-tone]:not([data-bg-tone="pure"]) .dark\:hover\:bg-\[\#1C1C1F\]:hover,
+html.dark[data-bg-tone]:not([data-bg-tone="pure"]) .dark\:hover\:bg-\[\#1F1F23\]:hover {
+  background-color: var(--wm-muted);
+}
+
 html.dark[data-bg-tone]:not([data-bg-tone="pure"]) .dark\:border-\[\#27272A\] {
   border-color: var(--wm-border);
+}
+
+html.dark[data-bg-tone]:not([data-bg-tone="pure"]) .dark\:divide-\[\#1F1F23\] > :not(:last-child) {
+  border-color: var(--wm-muted);
 }
 
 /* Unified tone-harmonized focus & selection states (no harsh black outlines or fills) */

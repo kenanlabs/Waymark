@@ -31,9 +31,10 @@ import type {
   PanelNode,
   Workspace,
 } from '../types/panel';
-import { changeAdminPassword } from '../utils/auth';
+import { changeAdminPassword, isVersionAtLeast } from '../utils/auth';
 import { candidatesToPanelNodes, parseBatchInput } from '../utils/batchParser';
 import { decryptVaultBundle, encryptVaultNodes } from '../utils/crypto';
+import { getExtensionZipBuffer } from '../utils/extension';
 import { EXTENSION_VERSION } from '../utils/extensionMeta';
 import { FONT_PRESETS, isFontCached, loadAndApplyFont } from '../utils/fontLoader';
 import { BRIDGE_VERSION, generateUserscriptSource } from '../utils/userscript';
@@ -178,7 +179,6 @@ export function SettingsModal({
   }, [open, fontFamily]);
 
   const handleSelectFont = async (targetFont: FontFamily) => {
-    if (downloadingFont) return;
     if (targetFont === 'default') {
       await loadAndApplyFont('default');
       onChangeFontFamily('default');
@@ -197,6 +197,7 @@ export function SettingsModal({
       return;
     }
 
+    if (downloadingFont) return;
     setDownloadingFont(targetFont);
     setFontProgress((prev) => ({ ...prev, [targetFont]: 2 }));
 
@@ -219,6 +220,10 @@ export function SettingsModal({
   const [rawText, setRawText] = useState('');
   const parsed = useMemo(() => parseBatchInput(rawText), [rawText]);
   const validCount = useMemo(() => parsed.filter((r) => r.valid).length, [parsed]);
+  const hasWorkspaceColumn = useMemo(
+    () => parsed.some((r) => Boolean(r.workspaceName)),
+    [parsed]
+  );
 
   // Admin password change state
   const [curAdminPass, setCurAdminPass] = useState('');
@@ -245,6 +250,13 @@ export function SettingsModal({
     setLockError('');
     setAdminPassMsg('');
     setAdminPassOk(false);
+    setCurAdminPass('');
+    setNewAdminPass('');
+    setPass1('');
+    setPass2('');
+    setExportPass('');
+    setImportPass('');
+    setPendingEncryptedEnvelope(null);
   } else if (!open && lastOpen) {
     setLastOpen(false);
   }
@@ -269,11 +281,20 @@ export function SettingsModal({
     if (downloadingExt) return;
     setDownloadingExt(true);
     try {
-      const resp = await fetch('/waymark-extension.zip', { cache: 'no-store' });
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
+      let blob: Blob | null = null;
+      try {
+        const resp = await fetch('/waymark-extension.zip', { cache: 'no-store' });
+        const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+        if (resp.ok && (contentType.includes('application/zip') || contentType.includes('application/octet-stream'))) {
+          blob = await resp.blob();
+        }
+      } catch {
+        // Fall through to client-side zip generation
       }
-      const blob = await resp.blob();
+      if (!blob) {
+        const zipBytes = getExtensionZipBuffer();
+        blob = new Blob([zipBytes as unknown as BlobPart], { type: 'application/zip' });
+      }
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
@@ -283,14 +304,51 @@ export function SettingsModal({
       a.remove();
       window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch {
-      onNotify('下载插件包失败，请检查网络连接后重试');
+      onNotify('下载插件包失败，请重试');
     } finally {
       setDownloadingExt(false);
     }
   };
 
+  const handleDownloadUserscript = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch('/waymark-bridge.user.js', { cache: 'no-store' });
+      const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+      if (resp.ok && contentType.includes('javascript')) {
+        const a = document.createElement('a');
+        a.href = '/waymark-bridge.user.js';
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        return;
+      }
+    } catch {
+      // Fall back to client-side Blob download
+    }
+    const blob = new Blob([scriptSource], { type: 'application/javascript;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = 'waymark-bridge.user.js';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  };
+
+  const handleBatchFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    e.target.value = '';
+    setRawText(text);
+  };
+
   const handleConfirmImport = () => {
-    const newNodes = candidatesToPanelNodes(parsed, activeWorkspace.id);
+    const newNodes = candidatesToPanelNodes(parsed, activeWorkspace.id, workspaces);
     if (newNodes.length === 0) return;
     onImportNodes(newNodes, false);
     setRawText('');
@@ -353,7 +411,8 @@ export function SettingsModal({
     URL.revokeObjectURL(url);
   };
 
-  const handleExportEncrypted = async () => {
+  const handleExportEncrypted = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (exportPass.length < 4) {
       onNotify('请先设置至少 4 位加密口令');
       return;
@@ -370,6 +429,22 @@ export function SettingsModal({
     } catch (err) {
       onNotify(err instanceof Error ? err.message : '导出加密备份失败');
     }
+  };
+
+  const handleExportPlainJson = () => {
+    const envelope: EncryptedVaultEnvelope = {
+      format: 'opsdeck-vault-v2',
+      encrypted: false,
+      nodes,
+      workspaces,
+      updatedAt: new Date().toISOString(),
+    };
+    triggerDownload(
+      `waymark-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      JSON.stringify(envelope, null, 2),
+      'application/json'
+    );
+    onNotify('已导出明文 JSON 备份');
   };
 
   const handleExportCsv = () => {
@@ -392,7 +467,7 @@ export function SettingsModal({
     );
     triggerDownload(
       `waymark-nodes-${new Date().toISOString().slice(0, 10)}.csv`,
-      [header, ...rows].join('\n'),
+      '\uFEFF' + [header, ...rows].join('\n'),
       'text/csv;charset=utf-8'
     );
     onNotify('已导出 CSV 表格');
@@ -403,8 +478,20 @@ export function SettingsModal({
     if (!file) return;
     const text = await file.text();
     e.target.value = '';
+    const trimmed = text.replace(/^\uFEFF/, '').trim();
+    if (file.name.toLowerCase().endsWith('.csv') || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) {
+      const candidates = parseBatchInput(trimmed);
+      const csvNodes = candidatesToPanelNodes(candidates, activeWorkspace.id, workspaces);
+      if (csvNodes.length > 0) {
+        onImportNodes(csvNodes, false);
+        onClose();
+        return;
+      }
+      onNotify('未能从该文件中解析出有效站点记录');
+      return;
+    }
     try {
-      const parsedJson = JSON.parse(text);
+      const parsedJson = JSON.parse(trimmed);
       if (
         (parsedJson?.format === 'opsdeck-vault-v2' || parsedJson?.format === 'paneldeck-vault-v1') &&
         parsedJson.encrypted
@@ -414,7 +501,9 @@ export function SettingsModal({
         return;
       }
       if (Array.isArray(parsedJson)) {
-        onImportNodes(parsedJson as PanelNode[], false);
+        const candidates = parseBatchInput(trimmed);
+        const listNodes = candidatesToPanelNodes(candidates, activeWorkspace.id, workspaces);
+        onImportNodes(listNodes.length > 0 ? listNodes : (parsedJson as PanelNode[]), false);
         onClose();
         return;
       }
@@ -427,9 +516,9 @@ export function SettingsModal({
         onClose();
         return;
       }
-      onNotify('无法识别该 JSON 文件格式');
+      onNotify('无法识别该备份文件格式');
     } catch {
-      onNotify('读取备份失败，请确认文件为有效 JSON');
+      onNotify('读取备份失败，请确认文件为有效 JSON 或 CSV');
     }
   };
 
@@ -747,7 +836,12 @@ export function SettingsModal({
                                 key={preset.id}
                                 type="button"
                                 onClick={() => void handleSelectFont(preset.id)}
-                                disabled={Boolean(downloadingFont && downloadingFont !== preset.id)}
+                                disabled={Boolean(
+                                  downloadingFont &&
+                                    downloadingFont !== preset.id &&
+                                    preset.id !== 'default' &&
+                                    !isCached
+                                )}
                                 aria-pressed={active}
                                 aria-busy={isDownloading}
                                 className={`group relative overflow-hidden flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all disabled:opacity-50 ${
@@ -847,7 +941,7 @@ export function SettingsModal({
                             </p>
                             {extensionActive &&
                               extensionVersion &&
-                              extensionVersion !== EXTENSION_VERSION && (
+                              !isVersionAtLeast(extensionVersion, EXTENSION_VERSION) && (
                                 <p className="mt-2 text-xs text-[#B45309] dark:text-[#FCD34D]">
                                   检测到旧版插件 v{extensionVersion}，建议下载 v{EXTENSION_VERSION} 重新覆盖加载以获得最新探测与填充修复。
                                 </p>
@@ -965,7 +1059,7 @@ export function SettingsModal({
                               </p>
                               {bridgeActive &&
                                 bridgeVersion &&
-                                bridgeVersion !== BRIDGE_VERSION && (
+                                !isVersionAtLeast(bridgeVersion, BRIDGE_VERSION) && (
                                   <p className="text-xs text-[#B45309] dark:text-[#FCD34D]">
                                     当前油猴脚本版本 {bridgeVersion} 较旧，请重新安装 v{BRIDGE_VERSION}。
                                   </p>
@@ -976,6 +1070,7 @@ export function SettingsModal({
                                   href="/waymark-bridge.user.js"
                                   target="_blank"
                                   rel="noopener noreferrer"
+                                  onClick={handleDownloadUserscript}
                                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium border border-[#E4E4E7] dark:border-[#27272A] hover:bg-[#F4F4F5] dark:hover:bg-[#1C1C1F] rounded-lg transition-colors whitespace-nowrap shrink-0"
                                 >
                                   <Download className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1024,13 +1119,50 @@ export function SettingsModal({
 
                   {tab === 'import' && (
                     <div className="space-y-4">
-                      <div>
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <label
-                          htmlFor={`${uid}-batch`}
-                          className="block text-xs font-medium text-[#27272A] dark:text-[#E4E4E7] mb-1.5"
-                        >
-                          批量导入至「{activeWorkspace.name}」（每行一条，支持 CSV / 制表符 / 竖线 / JSON）：名称, 访问地址, [用户名], [密码], [路径], [分组], [字段1], [字段2], [字段3]
-                        </label>
+                            htmlFor={`${uid}-batch`}
+                            className="block text-xs font-medium text-[#27272A] dark:text-[#E4E4E7]"
+                          >
+                            批量导入至「{activeWorkspace.name}」（支持导出 CSV / 逗号 / 制表符 / 竖线 / JSON）
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <label
+                              htmlFor={`${uid}-batch-file`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium border border-[#E4E4E7] dark:border-[#27272A] hover:bg-[#F4F4F5] dark:hover:bg-[#1C1C1F] rounded-md cursor-pointer transition-colors"
+                            >
+                              <Upload className="w-3 h-3" aria-hidden="true" />
+                              <span>选择 CSV / TXT / JSON 文件</span>
+                              <input
+                                id={`${uid}-batch-file`}
+                                type="file"
+                                accept=".csv,.txt,.json"
+                                onChange={handleBatchFileUpload}
+                                className="sr-only"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setRawText(FORMAT_GUIDE_PLACEHOLDER)}
+                              className="px-2 py-1 text-[11px] text-[#71717A] hover:text-[#09090B] dark:hover:text-white transition-colors"
+                            >
+                              填入示例
+                            </button>
+                            {rawText && (
+                              <button
+                                type="button"
+                                onClick={() => setRawText('')}
+                                className="px-2 py-1 text-[11px] text-[#71717A] hover:text-[#DC2626] transition-colors"
+                              >
+                                清空
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-[#71717A] dark:text-[#A1A1AA]">
+                          格式：名称, 访问地址, [用户名], [密码], [路径], [分组], [字段1], [字段2], [字段3]（同时兼容直接粘贴纯网址或导出的 CSV 表格）
+                        </p>
                         <textarea
                           id={`${uid}-batch`}
                           rows={6}
@@ -1043,22 +1175,30 @@ export function SettingsModal({
                       </div>
 
                       {parsed.length > 0 && (
-                        <div className="border border-[#E4E4E7] dark:border-[#27272A] rounded-lg overflow-x-auto max-h-44">
+                        <div className="border border-[#E4E4E7] dark:border-[#27272A] rounded-lg overflow-x-auto max-h-48">
                           <table className="w-full text-left border-collapse text-xs">
                             <thead>
                               <tr className="bg-[#FAFAFA] dark:bg-[#141417] border-b border-[#E4E4E7] dark:border-[#27272A] text-[#71717A]">
+                                {hasWorkspaceColumn && <th className="py-2 px-3">空间</th>}
                                 <th className="py-2 px-3">名称</th>
                                 <th className="py-2 px-3">地址</th>
                                 <th className="py-2 px-3">入口</th>
+                                <th className="py-2 px-3">分组</th>
                                 <th className="py-2 px-3">状态</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-[#F4F4F5] dark:divide-[#1F1F23]">
                               {parsed.map((r, i) => (
                                 <tr key={i} className={r.valid ? '' : 'opacity-50'}>
+                                  {hasWorkspaceColumn && (
+                                    <td className="py-1.5 px-3 text-[#71717A]">
+                                      {r.workspaceName || activeWorkspace.name}
+                                    </td>
+                                  )}
                                   <td className="py-1.5 px-3 font-medium">{r.name || '—'}</td>
                                   <td className="py-1.5 px-3 font-mono">{r.baseUrl || '—'}</td>
                                   <td className="py-1.5 px-3 font-mono">{r.entrance || '无'}</td>
+                                  <td className="py-1.5 px-3 text-[#71717A]">{r.group || '默认分组'}</td>
                                   <td className="py-1.5 px-3">
                                     {r.valid ? (
                                       <span className="text-[#16A34A]">就绪</span>
@@ -1073,7 +1213,12 @@ export function SettingsModal({
                         </div>
                       )}
 
-                      <div className="flex justify-end">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[11px] text-[#71717A]">
+                          {parsed.length > 0
+                            ? `共解析 ${parsed.length} 条，其中 ${validCount} 条有效`
+                            : '粘贴文本或选择文件后自动实时预览'}
+                        </span>
                         <button
                           type="button"
                           disabled={validCount === 0}
@@ -1234,7 +1379,7 @@ export function SettingsModal({
                       <div className="pt-5 border-t border-[#E4E4E7] dark:border-[#27272A] grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2.5">
                           <div className="text-xs font-semibold text-[#09090B] dark:text-[#FAFAFA]">导出备份</div>
-                          <div className="flex gap-2">
+                          <form onSubmit={handleExportEncrypted} className="flex gap-2">
                             <input
                               type="password"
                               autoComplete="new-password"
@@ -1243,24 +1388,32 @@ export function SettingsModal({
                               data-lpignore="true"
                               value={exportPass}
                               onChange={(e) => setExportPass(e.target.value)}
-                              placeholder="设置导出加密口令"
+                              placeholder="设置导出加密口令（至少 4 位）"
                               className="flex-1 min-w-0 px-3 py-1.5 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                             />
                             <button
-                              type="button"
-                              onClick={handleExportEncrypted}
+                              type="submit"
                               className="wm-btn-primary px-3 py-1.5 text-xs font-medium rounded-lg shrink-0 transition-colors"
                             >
                               加密导出
                             </button>
+                          </form>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={handleExportCsv}
+                              className="text-[11px] text-[#71717A] hover:text-[#09090B] dark:hover:text-white underline underline-offset-4"
+                            >
+                              导出明文 CSV（{nodes.length} 条）
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleExportPlainJson}
+                              className="text-[11px] text-[#71717A] hover:text-[#09090B] dark:hover:text-white underline underline-offset-4"
+                            >
+                              导出明文 JSON
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={handleExportCsv}
-                            className="text-[11px] text-[#71717A] hover:text-[#09090B] dark:hover:text-white underline underline-offset-4"
-                          >
-                            导出明文 CSV（{nodes.length} 条）
-                          </button>
                         </div>
 
                         <div className="space-y-2.5">
@@ -1270,11 +1423,11 @@ export function SettingsModal({
                             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium border border-[#E4E4E7] dark:border-[#27272A] hover:bg-[#F4F4F5] dark:hover:bg-[#1C1C1F] rounded-lg cursor-pointer"
                           >
                             <Upload className="w-3.5 h-3.5" />
-                            <span>选择 .json 备份文件</span>
+                            <span>选择 .json / .csv 备份文件</span>
                             <input
                               id={`${uid}-restore`}
                               type="file"
-                              accept=".json"
+                              accept=".json,.csv"
                               onChange={handleFileImport}
                               className="sr-only"
                             />
@@ -1292,8 +1445,21 @@ export function SettingsModal({
                                 placeholder="输入解密口令"
                                 className="flex-1 min-w-0 px-3 py-1.5 text-xs bg-[#FAFAFA] dark:bg-[#18181B] border border-[#E4E4E7] dark:border-[#27272A] rounded-lg focus:outline-none focus:border-[#09090B] dark:focus:border-[#FAFAFA] ring-inset focus:ring-1 focus:ring-[#09090B] dark:focus:ring-[#FAFAFA] transition-[border-color,box-shadow]"
                               />
-                              <button type="submit" className="px-3 py-1.5 text-xs bg-[#2563EB] text-white rounded-lg">
-                                解密
+                              <button
+                                type="submit"
+                                className="wm-btn-primary px-3 py-1.5 text-xs font-medium rounded-lg shrink-0 transition-colors"
+                              >
+                                解密恢复
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPendingEncryptedEnvelope(null);
+                                  setImportPass('');
+                                }}
+                                className="px-2 py-1.5 text-xs text-[#71717A] hover:text-[#09090B] dark:hover:text-white"
+                              >
+                                取消
                               </button>
                             </form>
                           )}

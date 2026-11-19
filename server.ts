@@ -69,6 +69,7 @@ interface ServerWorkspaceState {
   version: 1;
   activeWorkspaceId?: string;
   viewMode?: 'grid' | 'table';
+  theme?: 'light' | 'dark';
   bgTone?: string;
   bgPattern?: string;
   fontFamily?: string;
@@ -187,6 +188,8 @@ function readServerWorkspaceState(): ServerWorkspaceState | null {
           typeof parsed.activeWorkspaceId === 'string' ? parsed.activeWorkspaceId : undefined,
         viewMode:
           parsed.viewMode === 'table' || parsed.viewMode === 'grid' ? parsed.viewMode : undefined,
+        theme:
+          parsed.theme === 'dark' || parsed.theme === 'light' ? parsed.theme : undefined,
         bgTone: typeof parsed.bgTone === 'string' ? parsed.bgTone : undefined,
         bgPattern: typeof parsed.bgPattern === 'string' ? parsed.bgPattern : undefined,
         fontFamily: typeof parsed.fontFamily === 'string' ? parsed.fontFamily : undefined,
@@ -845,6 +848,7 @@ async function startServer(): Promise<void> {
     const body = req.body as {
       activeWorkspaceId?: string;
       viewMode?: string;
+      theme?: string;
       bgTone?: string;
       bgPattern?: string;
       fontFamily?: string;
@@ -864,6 +868,8 @@ async function startServer(): Promise<void> {
     const updatedAt = new Date().toISOString();
     const viewMode =
       body.viewMode === 'table' || body.viewMode === 'grid' ? body.viewMode : undefined;
+    const theme =
+      body.theme === 'dark' || body.theme === 'light' ? body.theme : undefined;
     const bgTone =
       body.bgTone === 'pure' ||
       body.bgTone === 'paper' ||
@@ -895,6 +901,7 @@ async function startServer(): Promise<void> {
           ? body.activeWorkspaceId.trim()
           : undefined,
       viewMode,
+      theme,
       bgTone,
       bgPattern,
       fontFamily,
@@ -909,7 +916,7 @@ async function startServer(): Promise<void> {
 
   // Serve Chrome / Edge Manifest V3 extension archive
   app.get('/waymark-extension.zip', (_req, res) => {
-    const zipBuffer = getExtensionZipBuffer();
+    const zipBuffer = Buffer.from(getExtensionZipBuffer());
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', 'attachment; filename="waymark-extension.zip"');
     res.setHeader('Cache-Control', 'no-store, no-transform');

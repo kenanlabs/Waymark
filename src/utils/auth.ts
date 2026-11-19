@@ -709,7 +709,7 @@ function parseVersionParts(input: string | null): number[] {
     .map((part) => Number.parseInt(part, 10) || 0);
 }
 
-function isVersionAtLeast(current: string | null, minimum: string): boolean {
+export function isVersionAtLeast(current: string | null, minimum: string): boolean {
   if (!current) return false;
   const a = parseVersionParts(current);
   const b = parseVersionParts(minimum);
@@ -1040,6 +1040,7 @@ export async function removePublicWorkspace(workspaceId: string): Promise<void> 
 export interface PersistedWorkspaceState {
   activeWorkspaceId?: string;
   viewMode?: ViewMode;
+  theme?: 'light' | 'dark';
   bgTone?: import('../types/panel').BgTone;
   bgPattern?: import('../types/panel').BgPattern;
   fontFamily?: import('../types/panel').FontFamily;
@@ -1092,6 +1093,7 @@ export async function fetchAdminState(): Promise<{
 export async function saveAdminState(payload: {
   activeWorkspaceId?: string;
   viewMode?: ViewMode;
+  theme?: 'light' | 'dark';
   bgTone?: import('../types/panel').BgTone;
   bgPattern?: import('../types/panel').BgPattern;
   fontFamily?: import('../types/panel').FontFamily;
